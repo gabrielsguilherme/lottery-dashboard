@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lottery Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-label="Lottery Dashboard Logo"><circle cx="16" cy="16" r="14" stroke="var(--color-primary)" stroke-width="2"/><circle cx="10" cy="13" r="3" fill="var(--color-primary)"/><circle cx="22" cy="13" r="3" fill="var(--color-gold)"/><circle cx="16" cy="21" r="3" fill="var(--color-success)"/><circle cx="10" cy="13" r="1.5" fill="var(--color-bg)"/><circle cx="22" cy="13" r="1.5" fill="var(--color-bg)"/><circle cx="16" cy="21" r="1.5" fill="var(--color-bg)"/></svg>
+        <span class="logo-text">LottoDash</span>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle" aria-label="Recolher menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#overview" class="nav-item active" data-section="overview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>Visão Geral</span></a>
+      <a href="#frequency" class="nav-item" data-section="frequency"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg><span>Frequência</span></a>
+      <a href="#history" class="nav-item" data-section="history"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg><span>Histórico</span></a>
+      <a href="#analysis" class="nav-item" data-section="analysis"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Análise</span></a>
+      <a href="#upload" class="nav-item" data-section="upload"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Importar</span></a>
+    </nav>
+    <div class="sidebar-footer"><button class="theme-toggle" data-theme-toggle aria-label="Alternar tema"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button></div>
+  </aside>
+  <div class="main-wrapper">
+    <header class="top-bar">
+      <button class="hamburger" id="hamburger" aria-label="Abrir menu"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <div class="top-bar-title" id="pageTitle">Visão Geral</div>
+      <div class="top-bar-actions"><span class="data-badge" id="dataBadge">Nenhum dado carregado</span></div>
+    </header>
+    <main class="content" id="mainContent">
+      <section id="overview" class="section active">
+        <div class="section-header"><h1 class="page-title">Visão Geral</h1><p class="page-subtitle">Resumo estatístico dos resultados importados</p></div>
+        <div class="kpi-grid" id="kpiGrid">
+          <div class="kpi-card"><div class="kpi-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg></div><div class="kpi-value" id="totalDraws">—</div><div class="kpi-label">Total de Sorteios</div></div>
+          <div class="kpi-card"><div class="kpi-icon" style="color:var(--color-gold)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></div><div class="kpi-value" id="mostFrequent">—</div><div class="kpi-label">Número Mais Sorteado</div></div>
+          <div class="kpi-card"><div class="kpi-icon" style="color:var(--color-success)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg></div><div class="kpi-value" id="avgFreq">—</div><div class="kpi-label">Média de Aparições</div></div>
+          <div class="kpi-card"><div class="kpi-icon" style="color:var(--color-orange)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="kpi-value" id="leastFrequent">—</div><div class="kpi-label">Número Menos Sorteado</div></div>
+        </div>
+        <div class="empty-state" id="overviewEmpty"><div class="empty-state-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div><h3>Nenhum dado importado</h3><p>Importe uma planilha de resultados para visualizar as estatísticas.</p><button class="btn btn-primary" onclick="navigateTo('upload')">Importar Planilha</button></div>
+        <div class="charts-grid" id="overviewCharts" style="display:none"><div class="chart-card"><div class="chart-header"><h2>Top 10 Números Mais Frequentes</h2></div><div class="chart-body"><canvas id="topNumbersChart"></canvas></div></div><div class="chart-card"><div class="chart-header"><h2>Distribuição por Faixas</h2></div><div class="chart-body"><canvas id="rangeChart"></canvas></div></div></div>
+      </section>
+      <section id="frequency" class="section">
+        <div class="section-header"><h1 class="page-title">Frequência dos Números</h1><p class="page-subtitle">Frequência de aparição de cada número nos sorteios</p></div>
+        <div class="empty-state" id="freqEmpty"><div class="empty-state-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><h3>Sem dados para exibir</h3><p>Importe uma planilha para ver a frequência dos números.</p><button class="btn btn-primary" onclick="navigateTo('upload')">Importar Planilha</button></div>
+        <div id="freqContent" style="display:none"><div class="chart-card full-width"><div class="chart-header"><h2>Frequência Completa</h2><div class="chart-actions"><select id="freqSort" class="select-sm"><option value="freq-desc">Maior frequência</option><option value="freq-asc">Menor frequência</option><option value="num-asc">Número crescente</option></select></div></div><div class="chart-body chart-body-tall"><canvas id="fullFreqChart"></canvas></div></div><div class="number-grid" id="numberGrid"></div></div>
+      </section>
+      <section id="history" class="section">
+        <div class="section-header"><h1 class="page-title">Histórico de Sorteios</h1><p class="page-subtitle">Todos os sorteios importados</p></div>
+        <div class="empty-state" id="historyEmpty"><div class="empty-state-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg></div><h3>Sem histórico</h3><p>Importe uma planilha para ver o histórico de sorteios.</p><button class="btn btn-primary" onclick="navigateTo('upload')">Importar Planilha</button></div>
+        <div id="historyContent" style="display:none"><div class="table-card"><div class="table-toolbar"><input type="search" id="historySearch" placeholder="Buscar por número ou concurso..." class="search-input"><span class="result-count" id="resultCount"></span></div><div class="table-wrapper"><table id="historyTable"><thead id="historyHead"></thead><tbody id="historyBody"></tbody></table></div><div class="table-pagination" id="tablePagination"></div></div></div>
+      </section>
+      <section id="analysis" class="section">
+        <div class="section-header"><h1 class="page-title">Análise Avançada</h1><p class="page-subtitle">Padrões, atrasos e estatísticas detalhadas</p></div>
+        <div class="empty-state" id="analysisEmpty"><div class="empty-state-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><h3>Sem dados para analisar</h3><p>Importe uma planilha para acessar a análise avançada.</p><button class="btn btn-primary" onclick="navigateTo('upload')">Importar Planilha</button></div>
+        <div id="analysisContent" style="display:none"><div class="charts-grid"><div class="chart-card"><div class="chart-header"><h2>Números Atrasados (último sorteio)</h2></div><div class="chart-body"><canvas id="delayChart"></canvas></div></div><div class="chart-card"><div class="chart-header"><h2>Pares vs Ímpares</h2></div><div class="chart-body chart-body-sm"><canvas id="parityChart"></canvas></div></div></div><div class="chart-card full-width" style="margin-top: var(--space-6)"><div class="chart-header"><h2>Temperatura dos Números</h2></div><div class="heatmap-legend"><span style="color:var(--color-blue)">&#9679; Frio</span><span style="color:var(--color-success)">&#9679; Morno</span><span style="color:var(--color-gold)">&#9679; Quente</span><span style="color:var(--color-error)">&#9679; Muito Quente</span></div><div class="heatmap" id="heatmap"></div></div></div>
+      </section>
+      <section id="upload" class="section">
+        <div class="section-header"><h1 class="page-title">Importar Planilha</h1><p class="page-subtitle">Carregue sua planilha de resultados (.xlsx, .xls ou .csv)</p></div>
+        <div class="upload-area" id="uploadArea"><div class="upload-inner" id="uploadInner"><div class="upload-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div><h3>Arraste sua planilha aqui</h3><p>ou clique para selecionar o arquivo</p><p class="upload-hint">Suporta .xlsx, .xls e .csv</p><input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none"><button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Selecionar Arquivo</button></div></div>
+        <div class="upload-progress" id="uploadProgress" style="display:none"><div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div><p id="progressText">Processando...</p></div>
+        <div class="upload-result" id="uploadResult" style="display:none"><div class="result-card success"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg><div><strong id="resultTitle">Arquivo carregado com sucesso!</strong><p id="resultDesc"></p></div></div><div class="preview-section"><h3>Pré-visualização dos dados</h3><div class="table-wrapper"><table id="previewTable"><thead id="previewHead"></thead><tbody id="previewBody"></tbody></table></div></div><div class="upload-actions"><button class="btn btn-primary" onclick="navigateTo('overview')">Ver Dashboard</button><button class="btn btn-ghost" onclick="resetUpload()">Carregar outro arquivo</button></div></div>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
