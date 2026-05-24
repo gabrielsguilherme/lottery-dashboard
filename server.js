@@ -135,6 +135,17 @@ function shuffle(array) {
   return array;
 }
 
+function checkPastWins(picked, draws) {
+  const wins = { sena: 0, quina: 0, quadra: 0 };
+  for (const d of draws) {
+    const matches = picked.filter(n => d.bolas.includes(n)).length;
+    if (matches === 6) wins.sena++;
+    else if (matches === 5) wins.quina++;
+    else if (matches === 4) wins.quadra++;
+  }
+  return wins;
+}
+
 function generateGames(draws, params = {}) {
   const {
     somaMin = 130, somaMax = 230,
@@ -142,14 +153,15 @@ function generateGames(draws, params = {}) {
     count = 10,
   } = params;
 
+  const PRECO_UNITARIO = 5.00;
   const freq = calcFrequency(draws);
   const quentes = freq.filter(f => f.categoria === 'Quente').map(f => f.numero);
   const frios = freq.filter(f => f.categoria === 'Frio').map(f => f.numero);
   const atrasados = freq.sort((a, b) => b.atraso - a.atraso).slice(0, 15).map(f => f.numero);
   const tendAlta = freq.filter(f => f.tendencia > 20).map(f => f.numero);
-  const tendBaixa = freq.filter(f => f.tendencia < -20).map(f => f.numero);
+  const impopulares = freq.filter(f => f.numero > 31).map(f => f.numero);
 
-  const strategies = ['Balanceado', 'Quentes', 'Frios', 'Atrasados', 'Tendência alta', 'Tendência baixa'];
+  const strategies = ['Balanceado', 'Quentes', 'Frios', 'Atrasados', 'Tendência alta', 'Impopulares'];
   const games = [];
   let attempts = 0;
 
@@ -171,7 +183,15 @@ function generateGames(draws, params = {}) {
     const pares = picked.filter(b => b % 2 === 0).length;
 
     if (soma >= somaMin && soma <= somaMax && pares >= minPares && pares <= maxPares) {
-      games.push({ numeros: picked, soma, pares, estrategia: strategy, valido: true });
+      const premios = checkPastWins(picked, draws);
+      const nAcima31 = picked.filter(n => n > 31).length;
+      
+      games.push({ 
+        numeros: picked, soma, pares, estrategia: strategy, 
+        premios,
+        custo: PRECO_UNITARIO,
+        rateioPotencial: nAcima31 >= 4 ? 'Alto' : 'Normal'
+      });
     }
   }
 
@@ -179,14 +199,14 @@ function generateGames(draws, params = {}) {
 }
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
-let cachedDraws = null;
+let loadingPromise = null;
 let lastLoaded = 0;
 
 async function getDraws() {
-  if (cachedDraws && Date.now() - lastLoaded < 60000) return cachedDraws;
-  cachedDraws = await loadDraws();
+  if (loadingPromise && Date.now() - lastLoaded < 60000) return loadingPromise;
   lastLoaded = Date.now();
-  return cachedDraws;
+  loadingPromise = loadDraws();
+  return loadingPromise;
 }
 
 app.get('/api/draws', async (req, res) => {

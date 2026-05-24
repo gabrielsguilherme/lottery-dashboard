@@ -106,7 +106,11 @@ async function generateGames() {
     <tr>
       <td>Jogo ${i + 1}</td>
       <td><div class="balls">${g.numeros.map(n => `<span class="ball">${n}</span>`).join('')}</div></td>
-      <td>${g.soma}</td><td>${g.pares}</td><td>${g.estrategia}</td>
+      <td>${g.soma}</td>
+      <td>${g.estrategia}</td>
+      <td>R$ ${g.custo.toFixed(2)}</td>
+      <td>${g.rateioPotencial}</td>
+      <td>${g.premios.sena > 0 ? '<strong>Sena!</strong>' : `${g.premios.quina}Q / ${g.premios.quadra}q`}</td>
     </tr>
   `).join('');
 }
