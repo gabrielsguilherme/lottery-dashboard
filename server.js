@@ -81,6 +81,7 @@ function calcFrequency(draws) {
     for (const b of draws[i].bolas) lastSeen[b] = i;
   }
 
+  const last100 = draws.slice(-100);
   const result = [];
   for (let i = 1; i <= 60; i++) {
     const f = freq[i];
@@ -89,7 +90,6 @@ function calcFrequency(draws) {
     if (f >= threshold_hot) categoria = 'Quente';
     else if (f <= threshold_cold) categoria = 'Frio';
 
-    const last100 = draws.slice(-100);
     const freqLast100 = last100.filter(d => d.bolas.includes(i)).length;
     const expectedLast100 = (f / total) * 100;
     const tendencia = ((freqLast100 - expectedLast100) / expectedLast100) * 100;
@@ -127,6 +127,14 @@ function getSomaFaixa(soma) {
 }
 
 // ─── Game generator ───────────────────────────────────────────────────────────
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
 function generateGames(draws, params = {}) {
   const {
     somaMin = 130, somaMax = 230,
@@ -157,8 +165,7 @@ function generateGames(draws, params = {}) {
     else if (strategy === 'Tendência baixa' && tendBaixa.length >= 6) pool = tendBaixa;
     else pool = Array.from({length: 60}, (_, i) => i + 1);
 
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    const picked = shuffled.slice(0, 6).sort((a, b) => a - b);
+    const picked = shuffle([...pool]).slice(0, 6).sort((a, b) => a - b);
 
     const soma = picked.reduce((a, b) => a + b, 0);
     const pares = picked.filter(b => b % 2 === 0).length;
