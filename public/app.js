@@ -97,8 +97,6 @@ async function generateGames() {
   const body = {
     somaMin: Number(document.getElementById('somaMin').value),
     somaMax: Number(document.getElementById('somaMax').value),
-    minPares: Number(document.getElementById('minPares').value),
-    maxPares: Number(document.getElementById('maxPares').value),
     count: Number(document.getElementById('countGames').value),
   };
   const games = await api('/api/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
@@ -107,9 +105,10 @@ async function generateGames() {
       <td>Jogo ${i + 1}</td>
       <td><div class="balls">${g.numeros.map(n => `<span class="ball">${n}</span>`).join('')}</div></td>
       <td>${g.soma}</td>
-      <td>${g.estrategia}</td>
+      <td>${g.pares}</td>
+      <td><span class="tag mid">${g.estrategia}</span></td>
       <td>R$ ${g.custo.toFixed(2)}</td>
-      <td>${g.rateioPotencial}</td>
+      <td>${g.rateioPotencial === 'Alto' ? '<span class="tag hot">Alto</span>' : '<span class="tag mid">Normal</span>'}</td>
       <td>${g.premios.sena > 0 ? '<strong>Sena!</strong>' : `${g.premios.quina}Q / ${g.premios.quadra}q`}</td>
     </tr>
   `).join('');

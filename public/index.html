@@ -104,9 +104,9 @@
         <div class="card"><h2 class="section-title">Distribuição de pares</h2><canvas id="parityChart"></canvas></div>
       </div>
       <div class="card" style="margin-top:16px;">
-        <h2 class="section-title">Regras históricas</h2>
-        <p class="hint">Use como filtro base: soma entre 130 e 230, de 2 a 4 números pares, distribuição entre faixas de dezenas.</p>
-        <ul><li>Soma recomendada: <strong>130 a 230</strong></li><li>Pares recomendados: <strong>2 a 4</strong></li><li>Evite todos pares ou todos ímpares</li><li>Distribua entre faixas 1-10, 11-20, 21-30, 31-40, 41-50 e 51-60</li></ul>
+        <h2 class="section-title">Regras Históricas Ativas</h2>
+        <p class="hint">O gerador agora usa inteligência estatística avançada extraindo números de Frequência Média.</p>
+        <ul><li>Filtro configurável de <strong>Soma</strong> (Padrão 130 a 230).</li><li><strong>Anti-Trincas</strong>: Proibido gerar 3 números consecutivos.</li><li><strong>Rateio Alto</strong>: Obriga a presença de pelo menos três dezenas maiores que 31.</li><li>Sorteio restrito aos números de frequência "Média".</li></ul>
       </div>
     </section>
     <section class="panel" id="panel-generator">
@@ -116,15 +116,13 @@
         <div class="form-grid">
           <div><label>Soma mínima</label><input type="number" id="somaMin" value="130" /></div>
           <div><label>Soma máxima</label><input type="number" id="somaMax" value="230" /></div>
-          <div><label>Mínimo de pares</label><input type="number" id="minPares" value="2" min="0" max="6" /></div>
-          <div><label>Máximo de pares</label><input type="number" id="maxPares" value="4" min="0" max="6" /></div>
           <div><label>Quantidade</label><input type="number" id="countGames" value="10" min="1" max="30" /></div>
         </div>
         <button class="btn-primary" id="generateBtn">Gerar jogos agora</button>
       </div>
       <div class="card" style="margin-top:16px;">
         <h2 class="section-title">Jogos sugeridos</h2>
-        <div class="table-wrap"><table><thead><tr><th>Jogo</th><th>Números</th><th>Soma</th><th>Pares</th><th>Estratégia</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Jogo</th><th>Números</th><th>Soma</th><th>Pares</th><th>Estratégia</th><th>Custo</th><th>Rateio Potencial</th><th>Premios Passados</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
       </div>
     </section>
   </div>
