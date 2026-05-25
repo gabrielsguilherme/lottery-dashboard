@@ -146,6 +146,19 @@ function checkPastWins(picked, draws) {
   return wins;
 }
 
+function hasConsecutive(picked) {
+  let count = 1;
+  for (let i = 1; i < picked.length; i++) {
+    if (picked[i] === picked[i - 1] + 1) {
+      count++;
+      if (count >= 3) return true;
+    } else {
+      count = 1;
+    }
+  }
+  return false;
+}
+
 function generateGames(draws, params = {}) {
   const {
     somaMin = 130, somaMax = 230,
@@ -154,40 +167,45 @@ function generateGames(draws, params = {}) {
   } = params;
 
   const PRECO_UNITARIO = 5.00;
-  const freq = calcFrequency(draws);
-  const quentes = freq.filter(f => f.categoria === 'Quente').map(f => f.numero);
-  const frios = freq.filter(f => f.categoria === 'Frio').map(f => f.numero);
-  const atrasados = freq.sort((a, b) => b.atraso - a.atraso).slice(0, 15).map(f => f.numero);
-  const tendAlta = freq.filter(f => f.tendencia > 20).map(f => f.numero);
-  const impopulares = freq.filter(f => f.numero > 31).map(f => f.numero);
-
-  const strategies = ['Balanceado', 'Quentes', 'Frios', 'Atrasados', 'Tendência alta', 'Impopulares'];
   const games = [];
   let attempts = 0;
 
-  while (games.length < count && attempts < 50000) {
+  // Calcula a frequência e isola os números medianos (nem muito nem pouco sorteados)
+  const freq = calcFrequency(draws);
+  const medios = freq.filter(f => f.categoria === 'Médio').map(f => f.numero);
+
+  // Fallback caso a categoria médio não retorne o suficiente (improvável)
+  const pool = medios.length >= 10 ? medios : Array.from({length: 60}, (_, i) => i + 1);
+
+  while (games.length < count && attempts < 500000) {
     attempts++;
-    const strategy = strategies[games.length % strategies.length];
-    let pool;
+    
+    // Sorteia 6 números EXCLUSIVAMENTE do pool de números medianos
+    const pickedSet = new Set();
+    while (pickedSet.size < 6) {
+      pickedSet.add(pool[Math.floor(Math.random() * pool.length)]);
+    }
+    const picked = Array.from(pickedSet).sort((a, b) => a - b);
 
-    if (strategy === 'Quentes' && quentes.length >= 6) pool = quentes;
-    else if (strategy === 'Frios' && frios.length >= 6) pool = frios;
-    else if (strategy === 'Atrasados' && atrasados.length >= 6) pool = atrasados;
-    else if (strategy === 'Tendência alta' && tendAlta.length >= 6) pool = tendAlta;
-    else if (strategy === 'Tendência baixa' && tendBaixa.length >= 6) pool = tendBaixa;
-    else pool = Array.from({length: 60}, (_, i) => i + 1);
-
-    const picked = shuffle([...pool]).slice(0, 6).sort((a, b) => a - b);
-
+    // Cálculos para os filtros
     const soma = picked.reduce((a, b) => a + b, 0);
     const pares = picked.filter(b => b % 2 === 0).length;
+    const nAcima31 = picked.filter(n => n > 31).length;
 
-    if (soma >= somaMin && soma <= somaMax && pares >= minPares && pares <= maxPares) {
+    // Filtros de validação
+    if (
+      soma >= somaMin && 
+      soma <= somaMax && 
+      nAcima31 >= 3 && 
+      !hasConsecutive(picked)
+    ) {
       const premios = checkPastWins(picked, draws);
-      const nAcima31 = picked.filter(n => n > 31).length;
       
       games.push({ 
-        numeros: picked, soma, pares, estrategia: strategy, 
+        numeros: picked, 
+        soma, 
+        pares, 
+        estrategia: 'Frequência Média', 
         premios,
         custo: PRECO_UNITARIO,
         rateioPotencial: nAcima31 >= 4 ? 'Alto' : 'Normal'
