@@ -7,63 +7,78 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
-      --bg: #0f172a; --surface: #111827; --surface-2: #1f2937;
-      --text: #f8fafc; --muted: #94a3b8;
-      --primary: #22c55e; --primary-2: #16a34a;
-      --accent: #38bdf8; --warning: #f59e0b; --danger: #f43f5e;
-      --border: rgba(148, 163, 184, 0.15); --radius: 18px;
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --surface-2: #f8fafc;
+      --text: #1e293b;
+      --muted: #64748b;
+      --primary: #209869; /* Verde Mega-Sena */
+      --primary-2: #17724f;
+      --accent: #005ca9; /* Azul Caixa */
+      --warning: #f29100; /* Laranja Caixa */
+      --danger: #ef4444;
+      --border: #e2e8f0;
+      --radius: 12px;
     }
     * { box-sizing: border-box; }
-    body { margin:0; font-family:Inter,system-ui,sans-serif; background:linear-gradient(180deg,#020617 0%,#0f172a 100%); color:var(--text); }
+    body { margin:0; font-family:Arial, sans-serif; background:var(--bg); color:var(--text); -webkit-font-smoothing: antialiased; }
+    .top-bar { background: var(--accent); height: 6px; width: 100%; }
     .container { max-width:1400px; margin:0 auto; padding:24px; }
-    .header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap; }
-    .logo { display:flex; align-items:center; gap:12px; }
-    .logo-mark { width:42px; height:42px; border-radius:12px; background:linear-gradient(135deg,var(--primary),var(--accent)); display:grid; place-items:center; font-weight:800; color:#041014; }
-    h1 { margin:0; font-size:2rem; }
-    .subtitle { color:var(--muted); margin-top:6px; }
+    .header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap; background: var(--surface); padding: 20px; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+    .logo { display:flex; align-items:center; gap:14px; }
+    .logo-mark { width:44px; height:44px; border-radius:8px; background:linear-gradient(135deg,var(--warning),var(--accent)); display:grid; place-items:center; font-weight:900; color:#ffffff; font-size: 1.5rem; }
+    h1 { margin:0; font-size:1.8rem; color: var(--accent); font-weight: 800; }
+    .subtitle { color:var(--muted); margin-top:4px; font-size: 0.95rem; }
     .actions { display:flex; gap:12px; flex-wrap:wrap; }
-    button { border:0; border-radius:12px; padding:12px 16px; cursor:pointer; font-weight:600; }
-    .btn-primary { background:var(--primary); color:#052e16; }
-    .btn-secondary { background:var(--surface-2); color:var(--text); border:1px solid var(--border); }
+    button { border:0; border-radius:8px; padding:12px 18px; cursor:pointer; font-weight:700; transition: all 0.2s ease; }
+    .btn-primary { background:var(--primary); color:#ffffff; }
+    .btn-primary:hover { background:var(--primary-2); transform: translateY(-1px); }
+    .btn-secondary { background:#ffffff; color:var(--accent); border:1px solid var(--accent); }
+    .btn-secondary:hover { background:rgba(0,92,169,0.05); }
     .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin-bottom:24px; }
-    .card { background:rgba(15,23,42,0.8); border:1px solid var(--border); border-radius:var(--radius); padding:18px; box-shadow:0 10px 30px rgba(0,0,0,0.25); backdrop-filter:blur(10px); }
-    .stat-label { color:var(--muted); font-size:.9rem; }
-    .stat-value { font-size:2rem; font-weight:800; margin-top:8px; }
-    .stat-extra { margin-top:10px; color:var(--muted); }
-    .tabs { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
-    .tab { background:var(--surface); color:var(--muted); border:1px solid var(--border); padding:10px 14px; border-radius:999px; cursor:pointer; font-weight:600; }
-    .tab.active { background:var(--primary); color:#052e16; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03); }
+    .stat-label { color:var(--muted); font-size:.9rem; font-weight: 600; }
+    .stat-value { font-size:2rem; font-weight:800; margin-top:8px; color: var(--accent); }
+    .stat-extra { margin-top:10px; color:var(--muted); font-size: 0.85rem; }
+    .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+    .tab { background:var(--surface); color:var(--muted); border:1px solid var(--border); padding:10px 18px; border-radius:20px; cursor:pointer; font-weight:700; transition: all 0.2s ease; }
+    .tab:hover { background: #f1f5f9; color: var(--text); }
+    .tab.active { background:var(--primary); color:#ffffff; border-color:var(--primary); }
     .panel { display:none; } .panel.active { display:block; }
     .grid-2 { display:grid; grid-template-columns:1.2fr .8fr; gap:16px; }
     .table-wrap { overflow:auto; }
     table { width:100%; border-collapse:collapse; }
-    th,td { padding:12px 10px; border-bottom:1px solid var(--border); text-align:left; }
-    th { color:var(--muted); font-size:.85rem; text-transform:uppercase; letter-spacing:.04em; }
+    th,td { padding:14px 12px; border-bottom:1px solid var(--border); text-align:left; }
+    th { color:var(--muted); font-size:.85rem; text-transform:uppercase; letter-spacing:.04em; font-weight: 700; }
+    td { color: var(--text); }
+    tr:hover td { background-color: #f8fafc; }
     .balls { display:flex; gap:8px; flex-wrap:wrap; }
-    .ball { width:38px; height:38px; border-radius:999px; display:grid; place-items:center; background:linear-gradient(135deg,var(--primary),var(--primary-2)); color:#052e16; font-weight:800; }
+    .ball { width:38px; height:38px; border-radius:999px; display:grid; place-items:center; background:var(--primary); color:#ffffff; font-weight:800; font-size: 1.05rem; box-shadow: 0 2px 4px rgba(32,152,105,0.25); border: 2px solid var(--primary-2); }
     .charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; }
-    .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:16px; }
-    label { display:block; margin-bottom:6px; color:var(--muted); font-size:.9rem; }
-    input { width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); }
-    .tag { padding:6px 10px; border-radius:999px; font-size:.8rem; font-weight:700; display:inline-block; }
-    .tag.hot { background:rgba(34,197,94,.15); color:#86efac; }
-    .tag.mid { background:rgba(56,189,248,.15); color:#7dd3fc; }
-    .tag.cold { background:rgba(244,63,94,.15); color:#fda4af; }
+    .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin-bottom:16px; }
+    label { display:block; margin-bottom:6px; color:var(--text); font-size:.9rem; font-weight: 700; }
+    input { width:100%; padding:12px 14px; border-radius:8px; border:1px solid var(--border); background:#ffffff; color:var(--text); font-size: 1rem; transition: border-color 0.2s ease; }
+    input:focus { border-color: var(--accent); outline: none; }
+    .tag { padding:6px 12px; border-radius:4px; font-size:.8rem; font-weight:700; display:inline-block; }
+    .tag.hot { background:rgba(32,152,105,.1); color:var(--primary-2); }
+    .tag.mid { background:rgba(0,92,169,.1); color:var(--accent); }
+    .tag.cold { background:rgba(239,68,68,.1); color:var(--danger); }
     .muted { color:var(--muted); }
-    .section-title { margin-top:0; margin-bottom:16px; }
+    .section-title { margin-top:0; margin-bottom:16px; color: var(--accent); font-weight: 800; }
     .hint { font-size:.95rem; color:var(--muted); margin-bottom:16px; }
     @media (max-width:900px) { .grid-2 { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
+  <div class="top-bar"></div>
   <div class="container">
     <div class="header">
       <div>
         <div class="logo">
-          <div class="logo-mark">LD</div>
+          <div class="logo-mark">X</div>
           <div>
-            <h1>Lottery Dashboard</h1>
-            <div class="subtitle">Dashboard local da Mega-Sena lendo direto da planilha Excel</div>
+            <h1>Loto<span style="color: var(--accent);">Analítica</span> <span style="font-weight:300; color:var(--text);">| Mega-Sena</span></h1>
+            <div class="subtitle">Painel de Análise Estatística & Gerador de Jogos</div>
           </div>
         </div>
       </div>

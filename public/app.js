@@ -63,16 +63,16 @@ function renderFrequency(freq) {
   destroyChart('freqChart');
   state.charts.freqChart = new Chart(document.getElementById('freqChart'), {
     type: 'bar',
-    data: { labels: freq.map(f => f.numero), datasets: [{ label: 'Frequência', data: freq.map(f => f.frequencia), backgroundColor: freq.map(f => f.categoria === 'Quente' ? '#22c55e' : f.categoria === 'Frio' ? '#f43f5e' : '#38bdf8') }] },
-    options: { responsive:true, plugins:{legend:{labels:{color:'#e2e8f0'}}}, scales:{x:{ticks:{color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'}}} }
+    data: { labels: freq.map(f => f.numero), datasets: [{ label: 'Frequência', data: freq.map(f => f.frequencia), backgroundColor: freq.map(f => f.categoria === 'Quente' ? '#209869' : f.categoria === 'Frio' ? '#ef4444' : '#005ca9') }] },
+    options: { responsive:true, plugins:{legend:{labels:{color:'#475569'}}}, scales:{x:{ticks:{color:'#64748b'}},y:{ticks:{color:'#64748b'}}} }
   });
 
   const topDelay = [...freq].sort((a,b) => b.atraso - a.atraso).slice(0, 10);
   destroyChart('delayChart');
   state.charts.delayChart = new Chart(document.getElementById('delayChart'), {
     type: 'bar',
-    data: { labels: topDelay.map(f => f.numero), datasets: [{ label: 'Atraso', data: topDelay.map(f => f.atraso), backgroundColor: '#f59e0b' }] },
-    options: { indexAxis:'y', responsive:true, plugins:{legend:{labels:{color:'#e2e8f0'}}}, scales:{x:{ticks:{color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'}}} }
+    data: { labels: topDelay.map(f => f.numero), datasets: [{ label: 'Atraso', data: topDelay.map(f => f.atraso), backgroundColor: '#f29100' }] },
+    options: { indexAxis:'y', responsive:true, plugins:{legend:{labels:{color:'#475569'}}}, scales:{x:{ticks:{color:'#64748b'}},y:{ticks:{color:'#64748b'}}} }
   });
 }
 
@@ -80,14 +80,14 @@ function renderStatsCharts(stats) {
   destroyChart('sumChart');
   state.charts.sumChart = new Chart(document.getElementById('sumChart'), {
     type: 'bar',
-    data: { labels: Object.keys(stats.somaDist), datasets: [{ label: 'Sorteios', data: Object.values(stats.somaDist), backgroundColor: '#38bdf8' }] },
-    options: { plugins:{legend:{labels:{color:'#e2e8f0'}}}, scales:{x:{ticks:{color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'}}} }
+    data: { labels: Object.keys(stats.somaDist), datasets: [{ label: 'Sorteios', data: Object.values(stats.somaDist), backgroundColor: '#005ca9' }] },
+    options: { plugins:{legend:{labels:{color:'#475569'}}}, scales:{x:{ticks:{color:'#64748b'}},y:{ticks:{color:'#64748b'}}} }
   });
   destroyChart('parityChart');
   state.charts.parityChart = new Chart(document.getElementById('parityChart'), {
     type: 'doughnut',
-    data: { labels: Object.keys(stats.pariDist).map(k => `${k} pares`), datasets: [{ data: Object.values(stats.pariDist), backgroundColor: ['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6','#3b82f6','#8b5cf6'] }] },
-    options: { plugins:{legend:{labels:{color:'#e2e8f0'}}} }
+    data: { labels: Object.keys(stats.pariDist).map(k => `${k} pares`), datasets: [{ data: Object.values(stats.pariDist), backgroundColor: ['#ef4444','#f97316','#f29100','#209869','#14b8a6','#3b82f6','#8b5cf6'] }] },
+    options: { plugins:{legend:{labels:{color:'#475569'}}} }
   });
 }
 
