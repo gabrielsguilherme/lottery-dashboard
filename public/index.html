@@ -114,9 +114,27 @@
         <h2 class="section-title">Gerador de jogos</h2>
         <p class="hint">O gerador usa os dados da planilha com filtros históricos, sem SQLite.</p>
         <div class="form-grid">
-          <div><label>Soma mínima</label><input type="number" id="somaMin" value="130" /></div>
-          <div><label>Soma máxima</label><input type="number" id="somaMax" value="230" /></div>
-          <div><label>Quantidade</label><input type="number" id="countGames" value="10" min="1" max="30" /></div>
+          <div>
+            <label>Soma mínima</label>
+            <input type="number" id="somaMin" value="130" />
+            <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 6px; line-height: 1.3;">
+              define o menor valor permitido para a soma das dezenas de um jogo; qualquer combinação cuja soma total fique abaixo desse limite é descartada.
+            </small>
+          </div>
+          <div>
+            <label>Soma máxima</label>
+            <input type="number" id="somaMax" value="230" />
+            <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 6px; line-height: 1.3;">
+              define o maior valor permitido para a soma das dezenas de um jogo; qualquer combinação cuja soma total ultrapasse esse limite é descartada.
+            </small>
+          </div>
+          <div>
+            <label>Quantidade</label>
+            <input type="number" id="countGames" value="10" min="1" max="30" />
+            <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 6px; line-height: 1.3;">
+              define quantos jogos válidos o sistema deve gerar após aplicar todos os filtros configurados.
+            </small>
+          </div>
         </div>
         <button class="btn-primary" id="generateBtn">Gerar jogos agora</button>
       </div>
