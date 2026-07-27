@@ -1,8 +1,28 @@
+const fs = require('fs');
+const path = require('path');
+
+// Carrega variáveis do arquivo .env caso ele exista localmente
+try {
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    const envConfig = fs.readFileSync(envPath, 'utf8');
+    envConfig.split('\n').forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+      const [key, ...valueParts] = trimmed.split('=');
+      if (key && valueParts.length > 0) {
+        const val = valueParts.join('=').trim().replace(/(^['"]|['"]$)/g, '');
+        process.env[key.trim()] = val;
+      }
+    });
+  }
+} catch (e) {
+  console.warn('Aviso: Não foi possível carregar o arquivo .env:', e.message);
+}
+
 const express = require('express');
 const ExcelJS = require('exceljs');
 const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 

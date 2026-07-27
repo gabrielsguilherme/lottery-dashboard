@@ -1,4 +1,5 @@
 const state = { stats: null, draws: [], frequency: [], charts: {}, token: null, username: null, isLoggedIn: false };
+let googleAuthInitialized = false;
 
 function updateAuthState() {
   const token = localStorage.getItem('token');
@@ -30,6 +31,7 @@ function updateAuthState() {
 }
 
 async function setupGoogleAuth() {
+  if (googleAuthInitialized) return;
   try {
     const { clientId } = await api('/api/auth/google/client-id');
     if (clientId && typeof google !== 'undefined') {
@@ -37,15 +39,27 @@ async function setupGoogleAuth() {
         client_id: clientId,
         callback: handleGoogleLogin
       });
-      google.accounts.id.renderButton(
-        document.getElementById('googleBtn'),
-        { theme: 'outline', size: 'large', width: '280' }
-      );
+      
+      const loginBtn = document.getElementById('googleBtn');
+      if (loginBtn) {
+        google.accounts.id.renderButton(loginBtn, { theme: 'outline', size: 'large', width: '280' });
+      }
+
+      const registerBtn = document.getElementById('googleRegisterBtn');
+      if (registerBtn) {
+        google.accounts.id.renderButton(registerBtn, { theme: 'outline', size: 'large', width: '280' });
+      }
+
+      googleAuthInitialized = true;
     }
   } catch (e) {
     console.error('Erro ao inicializar Google Sign-In:', e);
   }
 }
+
+window.onGoogleLibraryLoad = function() {
+  setupGoogleAuth();
+};
 
 async function handleGoogleLogin(response) {
   try {
@@ -392,10 +406,7 @@ async function loadAll() {
 }
 
 document.getElementById('generateBtn').addEventListener('click', generateGames);
-document.getElementById('generateBtnTop').addEventListener('click', () => {
-  document.querySelector('[data-tab="generator"]').click();
-  generateGames();
-});
+
 document.getElementById('reloadBtn').addEventListener('click', async () => {
   await api('/api/reload');
   await loadAll();

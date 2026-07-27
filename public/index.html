@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lottery Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://accounts.google.com/gsi/client" onload="onGoogleLibraryLoad()"></script>
   <style>
     :root {
       --bg: #f4f6f9;
@@ -130,6 +130,10 @@
         <div style="margin-bottom: 20px;">
           <label>Senha</label>
           <input type="password" id="registerPassword" placeholder="Crie uma senha forte" />
+        </div>
+        <!-- Google Register Button -->
+        <div style="margin-bottom: 20px; display: flex; justify-content: center;">
+          <div id="googleRegisterBtn"></div>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
           <button class="btn-primary" id="registerBtn" style="flex: 1; min-width: 150px;">Cadastrar</button>
