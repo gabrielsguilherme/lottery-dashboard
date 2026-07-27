@@ -125,37 +125,82 @@
       </div>
     </section>
     <section class="panel" id="panel-generator">
-      <div class="card">
-        <h2 class="section-title">Gerador de jogos</h2>
-        <p class="hint">O gerador usa os dados da planilha com filtros históricos, sem SQLite.</p>
-        <div class="form-grid">
-          <div>
-            <label>Soma mínima</label>
-            <input type="number" id="somaMin" value="130" />
-            <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 6px; line-height: 1.3;">
-              define o menor valor permitido para a soma das dezenas de um jogo; qualquer combinação cuja soma total fique abaixo desse limite é descartada.
-            </small>
+      <!-- Tela de Login / Cadastro -->
+      <div id="authContainer" class="card">
+        <h2 class="section-title" id="authTitle">Acesse sua conta para gerar jogos</h2>
+        <p class="hint" id="authHint">É necessário fazer login para ter acesso ao motor estatístico de geração de apostas.</p>
+        
+        <div id="loginForm">
+          <div style="margin-bottom: 16px;">
+            <label>Usuário</label>
+            <input type="text" id="loginUsername" placeholder="Digite seu usuário" />
           </div>
-          <div>
-            <label>Soma máxima</label>
-            <input type="number" id="somaMax" value="230" />
-            <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 6px; line-height: 1.3;">
-              define o maior valor permitido para a soma das dezenas de um jogo; qualquer combinação cuja soma total ultrapasse esse limite é descartada.
-            </small>
+          <div style="margin-bottom: 20px;">
+            <label>Senha</label>
+            <input type="password" id="loginPassword" placeholder="Digite sua senha" />
           </div>
-          <div>
-            <label>Quantidade</label>
-            <input type="number" id="countGames" value="10" min="1" max="30" />
-            <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 6px; line-height: 1.3;">
-              define quantos jogos válidos o sistema deve gerar após aplicar todos os filtros configurados.
-            </small>
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <button class="btn-primary" id="loginBtn" style="flex: 1; min-width: 150px;">Entrar</button>
+            <button class="btn-secondary" id="toRegisterBtn">Criar Conta</button>
           </div>
         </div>
-        <button class="btn-primary" id="generateBtn">Gerar jogos agora</button>
+
+        <div id="registerForm" style="display: none;">
+          <div style="margin-bottom: 16px;">
+            <label>Novo Usuário</label>
+            <input type="text" id="registerUsername" placeholder="Escolha um nome de usuário" />
+          </div>
+          <div style="margin-bottom: 20px;">
+            <label>Senha</label>
+            <input type="password" id="registerPassword" placeholder="Crie uma senha forte" />
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <button class="btn-primary" id="registerBtn" style="flex: 1; min-width: 150px;">Cadastrar</button>
+            <button class="btn-secondary" id="toLoginBtn">Voltar para o Login</button>
+          </div>
+        </div>
       </div>
-      <div class="card" style="margin-top:16px;">
-        <h2 class="section-title">Jogos sugeridos</h2>
-        <div class="table-wrap"><table><thead><tr><th>Jogo</th><th>Números</th><th>Soma</th><th>Pares</th><th>Estratégia</th><th>Custo</th><th>Rateio Potencial</th><th>Premios Passados</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
+
+      <!-- Área do Gerador de Jogos (escondida por padrão) -->
+      <div id="generatorContainer" style="display: none;">
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+            <h2 class="section-title" style="margin: 0;">Gerador de jogos</h2>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span id="userGreeting" style="font-weight: 700; color: var(--accent);">Olá, Usuário!</span>
+              <button class="btn-secondary" id="logoutBtn" style="padding: 6px 12px; font-size: 0.9rem;">Sair</button>
+            </div>
+          </div>
+          <p class="hint">O gerador usa os dados da planilha com filtros históricos, sem SQLite.</p>
+          <div class="form-grid">
+            <div>
+              <label>Soma mínima</label>
+              <input type="number" id="somaMin" value="130" />
+              <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 6px; line-height: 1.3;">
+                define o menor valor permitido para a soma das dezenas de um jogo; qualquer combinação cuja soma total fique abaixo desse limite é descartada.
+              </small>
+            </div>
+            <div>
+              <label>Soma máxima</label>
+              <input type="number" id="somaMax" value="230" />
+              <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 6px; line-height: 1.3;">
+                define o maior valor permitido para a soma das dezenas de um jogo; qualquer combinação cuja soma total ultrapasse esse limite é descartada.
+              </small>
+            </div>
+            <div>
+              <label>Quantidade</label>
+              <input type="number" id="countGames" value="10" min="1" max="30" />
+              <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 6px; line-height: 1.3;">
+                define quantos jogos válidos o sistema deve gerar após aplicar todos os filtros configurados.
+              </small>
+            </div>
+          </div>
+          <button class="btn-primary" id="generateBtn">Gerar jogos agora</button>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <h2 class="section-title">Jogos sugeridos</h2>
+          <div class="table-wrap"><table><thead><tr><th>Jogo</th><th>Números</th><th>Soma</th><th>Pares</th><th>Estratégia</th><th>Custo</th><th>Rateio Potencial</th><th>Premios Passados</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
+        </div>
       </div>
     </section>
   </div>

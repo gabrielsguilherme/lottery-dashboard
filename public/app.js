@@ -1,4 +1,94 @@
-const state = { stats: null, draws: [], frequency: [], charts: {} };
+const state = { stats: null, draws: [], frequency: [], charts: {}, token: null, username: null, isLoggedIn: false };
+
+function updateAuthState() {
+  const token = localStorage.getItem('token');
+  const username = localStorage.getItem('username');
+
+  if (token && username) {
+    state.token = token;
+    state.username = username;
+    state.isLoggedIn = true;
+    document.getElementById('authContainer').style.display = 'none';
+    document.getElementById('generatorContainer').style.display = 'block';
+    document.getElementById('userGreeting').innerText = `Olá, ${username}!`;
+  } else {
+    state.token = null;
+    state.username = null;
+    state.isLoggedIn = false;
+    document.getElementById('authContainer').style.display = 'block';
+    document.getElementById('generatorContainer').style.display = 'none';
+  }
+}
+
+function setupAuthListeners() {
+  document.getElementById('toRegisterBtn').addEventListener('click', () => {
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('registerForm').style.display = 'block';
+    document.getElementById('authTitle').innerText = 'Crie sua conta';
+    document.getElementById('authHint').innerText = 'Escolha um usuário e senha para cadastrar-se no painel.';
+  });
+
+  document.getElementById('toLoginBtn').addEventListener('click', () => {
+    document.getElementById('registerForm').style.display = 'none';
+    document.getElementById('loginForm').style.display = 'block';
+    document.getElementById('authTitle').innerText = 'Acesse sua conta para gerar jogos';
+    document.getElementById('authHint').innerText = 'É necessário fazer login para ter acesso ao motor estatístico de geração de apostas.';
+  });
+
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    if (!username || !password) {
+      alert('Por favor, digite o usuário e a senha.');
+      return;
+    }
+
+    try {
+      const data = await api('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('username', data.username);
+      updateAuthState();
+      await generateGames();
+    } catch (e) {
+      alert(e.message || 'Erro ao fazer login.');
+    }
+  });
+
+  document.getElementById('registerBtn').addEventListener('click', async () => {
+    const username = document.getElementById('registerUsername').value.trim();
+    const password = document.getElementById('registerPassword').value;
+
+    if (!username || !password) {
+      alert('Por favor, defina um usuário e uma senha.');
+      return;
+    }
+
+    try {
+      const data = await api('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      alert(data.message || 'Usuário cadastrado com sucesso! Faça o login agora.');
+      document.getElementById('toLoginBtn').click();
+    } catch (e) {
+      alert(e.message || 'Erro ao realizar cadastro.');
+    }
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    updateAuthState();
+  });
+}
 
 async function api(url, options) {
   const res = await fetch(url, options);
@@ -94,24 +184,45 @@ function renderStatsCharts(stats) {
 function destroyChart(name) { if (state.charts[name]) state.charts[name].destroy(); }
 
 async function generateGames() {
+  if (!state.isLoggedIn) return;
+
   const body = {
     somaMin: Number(document.getElementById('somaMin').value),
     somaMax: Number(document.getElementById('somaMax').value),
     count: Number(document.getElementById('countGames').value),
   };
-  const games = await api('/api/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
-  document.getElementById('gamesTable').innerHTML = games.map((g, i) => `
-    <tr>
-      <td>Jogo ${i + 1}</td>
-      <td><div class="balls">${g.numeros.map(n => `<span class="ball">${n}</span>`).join('')}</div></td>
-      <td>${g.soma}</td>
-      <td>${g.pares}</td>
-      <td><span class="tag mid">${g.estrategia}</span></td>
-      <td>R$ ${g.custo.toFixed(2)}</td>
-      <td>${g.rateioPotencial === 'Alto' ? '<span class="tag hot">Alto</span>' : '<span class="tag mid">Normal</span>'}</td>
-      <td>${g.premios.sena > 0 ? '<strong>Sena!</strong>' : `${g.premios.quina}Q / ${g.premios.quadra}q`}</td>
-    </tr>
-  `).join('');
+
+  try {
+    const games = await api('/api/generate', { 
+      method: 'POST', 
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.token}`
+      }, 
+      body: JSON.stringify(body) 
+    });
+
+    document.getElementById('gamesTable').innerHTML = games.map((g, i) => `
+      <tr>
+        <td>Jogo ${i + 1}</td>
+        <td><div class="balls">${g.numeros.map(n => `<span class="ball">${n}</span>`).join('')}</div></td>
+        <td>${g.soma}</td>
+        <td>${g.pares}</td>
+        <td><span class="tag mid">${g.estrategia}</span></td>
+        <td>R$ ${g.custo.toFixed(2)}</td>
+        <td>${g.rateioPotencial === 'Alto' ? '<span class="tag hot">Alto</span>' : '<span class="tag mid">Normal</span>'}</td>
+        <td>${g.premios.sena > 0 ? '<strong>Sena!</strong>' : `${g.premios.quina}Q / ${g.premios.quadra}q`}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    if (e.message.includes('401') || e.message.includes('403')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('username');
+      updateAuthState();
+    } else {
+      alert('Erro ao gerar jogos: ' + e.message);
+    }
+  }
 }
 
 async function loadAll() {
@@ -120,7 +231,10 @@ async function loadAll() {
   ]);
   state.stats = stats; state.draws = draws.draws; state.frequency = frequency;
   renderStats(stats); renderDraws(draws.draws); renderFrequency(frequency); renderStatsCharts(stats);
-  await generateGames();
+  updateAuthState();
+  if (state.isLoggedIn) {
+    await generateGames();
+  }
 }
 
 document.getElementById('generateBtn').addEventListener('click', generateGames);
@@ -135,6 +249,7 @@ document.getElementById('reloadBtn').addEventListener('click', async () => {
 });
 
 setTabs();
+setupAuthListeners();
 loadAll().catch(err => {
   document.body.innerHTML = `<div style="padding:24px;color:white;font-family:Inter,sans-serif"><h1>Erro ao carregar dashboard</h1><pre>${err.message}</pre><p>Coloque o arquivo <strong>MegaSena_Dashboard.xlsx</strong> dentro da pasta <strong>data/</strong>.</p></div>`;
 });

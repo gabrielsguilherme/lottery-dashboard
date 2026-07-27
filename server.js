@@ -3,6 +3,46 @@ const ExcelJS = require('exceljs');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey_megasena_dashboard';
+const USERS_PATH = path.join(__dirname, 'data', 'users.json');
+
+function loadUsers() {
+  if (!fs.existsSync(USERS_PATH)) {
+    fs.writeFileSync(USERS_PATH, JSON.stringify([]));
+    return [];
+  }
+  try {
+    const data = fs.readFileSync(USERS_PATH, 'utf8');
+    return JSON.parse(data || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveUsers(users) {
+  fs.writeFileSync(USERS_PATH, JSON.stringify(users, null, 2));
+}
+
+// Middleware to authenticate token
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Acesso negado. Faça login para gerar jogos.' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Token inválido ou expirado.' });
+    }
+    req.user = user;
+    next();
+  });
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -264,7 +304,63 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-app.post('/api/generate', async (req, res) => {
+// ─── Authentication Endpoints ────────────────────────────────────────────────
+app.post('/api/auth/register', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Usuário e senha são obrigatórios.' });
+  }
+
+  const users = loadUsers();
+  if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) {
+    return res.status(400).json({ error: 'Este usuário já existe.' });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = {
+      id: Date.now().toString(),
+      username,
+      passwordHash: hashedPassword
+    };
+    users.push(newUser);
+    saveUsers(users);
+    res.status(201).json({ message: 'Usuário registrado com sucesso!' });
+  } catch (e) {
+    res.status(500).json({ error: 'Erro ao registrar usuário.' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Usuário e senha são obrigatórios.' });
+  }
+
+  const users = loadUsers();
+  const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+  if (!user) {
+    return res.status(400).json({ error: 'Usuário ou senha inválidos.' });
+  }
+
+  try {
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      return res.status(400).json({ error: 'Usuário ou senha inválidos.' });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.json({ token, username: user.username });
+  } catch (e) {
+    res.status(500).json({ error: 'Erro ao processar login.' });
+  }
+});
+
+app.post('/api/generate', authenticateToken, async (req, res) => {
   try {
     const draws = await getDraws();
     const games = generateGames(draws, req.body);
