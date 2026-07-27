@@ -9,15 +9,162 @@ function updateAuthState() {
     state.username = username;
     state.isLoggedIn = true;
     document.getElementById('authContainer').style.display = 'none';
-    document.getElementById('generatorContainer').style.display = 'block';
+    document.getElementById('appContent').style.display = 'block';
+    document.getElementById('headerActions').style.display = 'flex';
     document.getElementById('userGreeting').innerText = `Olá, ${username}!`;
+    document.getElementById('usersTab').style.display = 'inline-block';
   } else {
     state.token = null;
     state.username = null;
     state.isLoggedIn = false;
     document.getElementById('authContainer').style.display = 'block';
-    document.getElementById('generatorContainer').style.display = 'none';
+    document.getElementById('appContent').style.display = 'none';
+    document.getElementById('headerActions').style.display = 'none';
+    document.getElementById('usersTab').style.display = 'none';
+    
+    const activeTab = document.querySelector('.tab.active');
+    if (activeTab && activeTab.dataset.tab === 'users') {
+      document.querySelector('[data-tab="results"]').click();
+    }
   }
+}
+
+async function setupGoogleAuth() {
+  try {
+    const { clientId } = await api('/api/auth/google/client-id');
+    if (clientId && typeof google !== 'undefined') {
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleLogin
+      });
+      google.accounts.id.renderButton(
+        document.getElementById('googleBtn'),
+        { theme: 'outline', size: 'large', width: '280' }
+      );
+    }
+  } catch (e) {
+    console.error('Erro ao inicializar Google Sign-In:', e);
+  }
+}
+
+async function handleGoogleLogin(response) {
+  try {
+    const data = await api('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: response.credential })
+    });
+
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('username', data.username);
+    updateAuthState();
+    await generateGames();
+  } catch (e) {
+    alert('Erro no login do Google: ' + e.message);
+  }
+}
+
+async function loadUsersList() {
+  if (!state.isLoggedIn) return;
+  try {
+    const users = await api('/api/users', {
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    
+    document.getElementById('usersTableBody').innerHTML = users.map(u => `
+      <tr>
+        <td>${u.name}</td>
+        <td>${u.email}</td>
+        <td>${u.username}</td>
+        <td>
+          <button class="btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" onclick="openEditUserModal('${u.id}', '${u.name}', '${u.email}', '${u.username}')">Editar</button>
+          <button class="btn-secondary" style="padding: 6px 12px; font-size: 0.85rem; border-color: var(--danger); color: var(--danger);" onclick="deleteUser('${u.id}')">Excluir</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    alert('Erro ao carregar usuários: ' + e.message);
+  }
+}
+
+window.openEditUserModal = function(id, name, email, username) {
+  document.getElementById('modalUserId').value = id;
+  document.getElementById('modalName').value = name;
+  document.getElementById('modalEmail').value = email;
+  document.getElementById('modalUsername').value = username;
+  document.getElementById('modalPassword').value = '';
+  
+  document.getElementById('modalTitle').innerText = 'Editar Usuário';
+  document.getElementById('passwordHint').style.display = 'inline';
+  document.getElementById('userModal').style.display = 'grid';
+};
+
+window.deleteUser = async function(id) {
+  if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
+  try {
+    await api(`/api/users/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    alert('Usuário excluído com sucesso!');
+    loadUsersList();
+  } catch (e) {
+    alert(e.message || 'Erro ao excluir usuário.');
+  }
+};
+
+function setupUserCRUD() {
+  document.getElementById('createUserBtn').addEventListener('click', () => {
+    document.getElementById('modalUserId').value = '';
+    document.getElementById('modalName').value = '';
+    document.getElementById('modalEmail').value = '';
+    document.getElementById('modalUsername').value = '';
+    document.getElementById('modalPassword').value = '';
+    
+    document.getElementById('modalTitle').innerText = 'Cadastrar Usuário';
+    document.getElementById('passwordHint').style.display = 'none';
+    document.getElementById('userModal').style.display = 'grid';
+  });
+
+  document.getElementById('closeModalBtn').addEventListener('click', () => {
+    document.getElementById('userModal').style.display = 'none';
+  });
+
+  document.getElementById('saveUserBtn').addEventListener('click', async () => {
+    const id = document.getElementById('modalUserId').value;
+    const name = document.getElementById('modalName').value.trim();
+    const email = document.getElementById('modalEmail').value.trim();
+    const username = document.getElementById('modalUsername').value.trim();
+    const password = document.getElementById('modalPassword').value;
+
+    if (!name || !email || !username || (!id && !password)) {
+      alert('Por favor, preencha todos os campos obrigatórios.');
+      return;
+    }
+
+    const body = { name, email, username };
+    if (password) body.password = password;
+
+    try {
+      const method = id ? 'PUT' : 'POST';
+      const url = id ? `/api/users/${id}` : '/api/users';
+      
+      await api(url, {
+        method,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${state.token}`
+        },
+        body: JSON.stringify(body)
+      });
+
+      alert(id ? 'Usuário atualizado com sucesso!' : 'Usuário cadastrado com sucesso!');
+      document.getElementById('userModal').style.display = 'none';
+      loadUsersList();
+    } catch (e) {
+      alert(e.message || 'Erro ao salvar usuário.');
+    }
+  });
 }
 
 function setupAuthListeners() {
@@ -61,11 +208,13 @@ function setupAuthListeners() {
   });
 
   document.getElementById('registerBtn').addEventListener('click', async () => {
+    const name = document.getElementById('registerName').value.trim();
+    const email = document.getElementById('registerEmail').value.trim();
     const username = document.getElementById('registerUsername').value.trim();
     const password = document.getElementById('registerPassword').value;
 
-    if (!username || !password) {
-      alert('Por favor, defina um usuário e uma senha.');
+    if (!name || !email || !username || !password) {
+      alert('Por favor, preencha todos os campos obrigatórios (nome, email, usuário e senha).');
       return;
     }
 
@@ -73,7 +222,7 @@ function setupAuthListeners() {
       const data = await api('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ name, email, username, password })
       });
 
       alert(data.message || 'Usuário cadastrado com sucesso! Faça o login agora.');
@@ -103,6 +252,10 @@ function setTabs() {
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(`panel-${tab.dataset.tab}`).classList.add('active');
+      
+      if (tab.dataset.tab === 'users') {
+        loadUsersList();
+      }
     });
   });
 }
@@ -232,6 +385,7 @@ async function loadAll() {
   state.stats = stats; state.draws = draws.draws; state.frequency = frequency;
   renderStats(stats); renderDraws(draws.draws); renderFrequency(frequency); renderStatsCharts(stats);
   updateAuthState();
+  setupGoogleAuth();
   if (state.isLoggedIn) {
     await generateGames();
   }
@@ -250,6 +404,7 @@ document.getElementById('reloadBtn').addEventListener('click', async () => {
 
 setTabs();
 setupAuthListeners();
+setupUserCRUD();
 loadAll().catch(err => {
   document.body.innerHTML = `<div style="padding:24px;color:white;font-family:Inter,sans-serif"><h1>Erro ao carregar dashboard</h1><pre>${err.message}</pre><p>Coloque o arquivo <strong>MegaSena_Dashboard.xlsx</strong> dentro da pasta <strong>data/</strong>.</p></div>`;
 });

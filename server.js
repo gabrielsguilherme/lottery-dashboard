@@ -306,21 +306,26 @@ app.get('/api/stats', async (req, res) => {
 
 // ─── Authentication Endpoints ────────────────────────────────────────────────
 app.post('/api/auth/register', async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Usuário e senha são obrigatórios.' });
+  const { username, password, name, email } = req.body;
+  if (!username || !password || !name || !email) {
+    return res.status(400).json({ error: 'Todos os campos (nome, email, usuário e senha) são obrigatórios.' });
   }
 
   const users = loadUsers();
   if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) {
-    return res.status(400).json({ error: 'Este usuário já existe.' });
+    return res.status(400).json({ error: 'Este nome de usuário já existe.' });
+  }
+  if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+    return res.status(400).json({ error: 'Este email já está cadastrado.' });
   }
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = {
-      id: Date.now().toString(),
+      id: Date.now().toString() + Math.random().toString().slice(2, 6),
       username,
+      name,
+      email: email.toLowerCase(),
       passwordHash: hashedPassword
     };
     users.push(newUser);
@@ -358,6 +363,172 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: 'Erro ao processar login.' });
   }
+});
+
+app.post('/api/auth/google', async (req, res) => {
+  const { credential } = req.body;
+  if (!credential) {
+    return res.status(400).json({ error: 'Credencial do Google ausente.' });
+  }
+
+  try {
+    // Valida o token com o Google chamando o endpoint de validação
+    const googleRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`);
+    if (!googleRes.ok) {
+      return res.status(400).json({ error: 'Token do Google inválido ou expirado.' });
+    }
+
+    const payload = await googleRes.json();
+    const { email, name, sub } = payload;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Não foi possível obter o email do Google.' });
+    }
+
+    const users = loadUsers();
+    let user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+    // Se o usuário não existe, cria um novo usuário automaticamente
+    if (!user) {
+      let baseUsername = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
+      let username = baseUsername;
+      let counter = 1;
+
+      while (users.find(u => u.username.toLowerCase() === username.toLowerCase())) {
+        username = baseUsername + counter;
+        counter++;
+      }
+
+      user = {
+        id: Date.now().toString() + Math.random().toString().slice(2, 6),
+        username,
+        name: name || username,
+        email: email.toLowerCase(),
+        passwordHash: null, // Usuários do Google não têm senha local
+        googleId: sub
+      };
+      users.push(user);
+      saveUsers(users);
+    }
+
+    // Gera o token JWT local
+    const token = jwt.sign(
+      { id: user.id, username: user.username },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({ token, username: user.username });
+  } catch (e) {
+    res.status(500).json({ error: 'Erro ao autenticar com o Google: ' + e.message });
+  }
+});
+
+app.get('/api/auth/google/client-id', (req, res) => {
+  res.json({ clientId: process.env.GOOGLE_CLIENT_ID || '1008719970978-gp2ddch93g5f.apps.googleusercontent.com' });
+});
+
+// ─── User CRUD Endpoints (Protected by JWT) ───────────────────────────────────
+app.get('/api/users', authenticateToken, (req, res) => {
+  try {
+    const users = loadUsers();
+    const safeUsers = users.map(({ passwordHash, ...rest }) => rest);
+    res.json(safeUsers);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/users', authenticateToken, async (req, res) => {
+  const { username, password, name, email } = req.body;
+  if (!username || !password || !name || !email) {
+    return res.status(400).json({ error: 'Todos os campos (nome, email, usuário e senha) são obrigatórios.' });
+  }
+
+  const users = loadUsers();
+  if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) {
+    return res.status(400).json({ error: 'Este nome de usuário já existe.' });
+  }
+  if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+    return res.status(400).json({ error: 'Este email já está cadastrado.' });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = {
+      id: Date.now().toString() + Math.random().toString().slice(2, 6),
+      username,
+      name,
+      email: email.toLowerCase(),
+      passwordHash: hashedPassword
+    };
+    users.push(newUser);
+    saveUsers(users);
+
+    const { passwordHash, ...safeUser } = newUser;
+    res.status(201).json(safeUser);
+  } catch (e) {
+    res.status(500).json({ error: 'Erro ao criar usuário.' });
+  }
+});
+
+app.put('/api/users/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { username, password, name, email } = req.body;
+
+  if (!username || !name || !email) {
+    return res.status(400).json({ error: 'Nome, email e usuário são obrigatórios.' });
+  }
+
+  const users = loadUsers();
+  const userIndex = users.findIndex(u => u.id === id);
+  if (userIndex === -1) {
+    return res.status(404).json({ error: 'Usuário não encontrado.' });
+  }
+
+  if (users.find(u => u.id !== id && u.username.toLowerCase() === username.toLowerCase())) {
+    return res.status(400).json({ error: 'Este nome de usuário já está em uso.' });
+  }
+  if (users.find(u => u.id !== id && u.email.toLowerCase() === email.toLowerCase())) {
+    return res.status(400).json({ error: 'Este email já está em uso.' });
+  }
+
+  try {
+    const user = users[userIndex];
+    user.username = username;
+    user.name = name;
+    user.email = email.toLowerCase();
+
+    if (password) {
+      user.passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    users[userIndex] = user;
+    saveUsers(users);
+
+    const { passwordHash, ...safeUser } = user;
+    res.json(safeUser);
+  } catch (e) {
+    res.status(500).json({ error: 'Erro ao atualizar usuário.' });
+  }
+});
+
+app.delete('/api/users/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+
+  if (req.user.id === id) {
+    return res.status(400).json({ error: 'Você não pode excluir sua própria conta enquanto estiver logado.' });
+  }
+
+  const users = loadUsers();
+  const userIndex = users.findIndex(u => u.id === id);
+  if (userIndex === -1) {
+    return res.status(404).json({ error: 'Usuário não encontrado.' });
+  }
+
+  users.splice(userIndex, 1);
+  saveUsers(users);
+  res.json({ success: true, message: 'Usuário excluído com sucesso.' });
 });
 
 app.post('/api/generate', authenticateToken, async (req, res) => {

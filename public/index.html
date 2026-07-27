@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lottery Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root {
       --bg: #f4f6f9;
@@ -82,95 +83,109 @@
           </div>
         </div>
       </div>
-      <div class="actions">
+      <div class="actions" id="headerActions" style="display: none;">
+        <span id="userGreeting" style="font-weight: 700; color: var(--accent); margin-right: 12px; align-self: center;"></span>
         <button class="btn-secondary" id="reloadBtn">Recarregar planilha</button>
-        <button class="btn-primary" id="generateBtnTop">Gerar jogos</button>
+        <button class="btn-secondary" id="logoutBtn" style="border-color: var(--danger); color: var(--danger);">Sair</button>
       </div>
     </div>
-    <div class="stats-grid" id="statsGrid"></div>
-    <div class="tabs">
-      <button class="tab active" data-tab="results">Últimos Resultados</button>
-      <button class="tab" data-tab="frequency">Frequência</button>
-      <button class="tab" data-tab="patterns">Soma & Paridade</button>
-      <button class="tab" data-tab="generator">Gerador</button>
-    </div>
-    <section class="panel active" id="panel-results">
-      <div class="grid-2">
-        <div class="card">
-          <h2 class="section-title">Últimos concursos</h2>
-          <div class="table-wrap"><table><thead><tr><th>Concurso</th><th>Data</th><th>Dezenas</th></tr></thead><tbody id="resultsTable"></tbody></table></div>
-        </div>
-        <div class="card"><h2 class="section-title">Resumo rápido</h2><div id="latestSummary"></div></div>
-      </div>
-    </section>
-    <section class="panel" id="panel-frequency">
-      <div class="charts">
-        <div class="card"><h2 class="section-title">Frequência histórica</h2><canvas id="freqChart"></canvas></div>
-        <div class="card"><h2 class="section-title">Top atrasos</h2><canvas id="delayChart"></canvas></div>
-      </div>
-      <div class="card" style="margin-top:16px;">
-        <h2 class="section-title">Tabela de frequência</h2>
-        <div class="table-wrap"><table><thead><tr><th>Número</th><th>Frequência</th><th>Taxa</th><th>Categoria</th><th>Atraso</th><th>Tendência</th></tr></thead><tbody id="frequencyTable"></tbody></table></div>
-      </div>
-    </section>
-    <section class="panel" id="panel-patterns">
-      <div class="charts">
-        <div class="card"><h2 class="section-title">Distribuição da soma</h2><canvas id="sumChart"></canvas></div>
-        <div class="card"><h2 class="section-title">Distribuição de pares</h2><canvas id="parityChart"></canvas></div>
-      </div>
-      <div class="card" style="margin-top:16px;">
-        <h2 class="section-title">Regras Históricas Ativas</h2>
-        <p class="hint">O gerador agora usa inteligência estatística avançada extraindo números de Frequência Média.</p>
-        <ul><li>Filtro configurável de <strong>Soma</strong> (Padrão 130 a 230).</li><li><strong>Anti-Trincas</strong>: Proibido gerar 3 números consecutivos.</li><li><strong>Rateio Alto</strong>: Obriga a presença de pelo menos três dezenas maiores que 31.</li><li>Sorteio restrito aos números de frequência "Média".</li></ul>
-      </div>
-    </section>
-    <section class="panel" id="panel-generator">
-      <!-- Tela de Login / Cadastro -->
-      <div id="authContainer" class="card">
-        <h2 class="section-title" id="authTitle">Acesse sua conta para gerar jogos</h2>
-        <p class="hint" id="authHint">É necessário fazer login para ter acesso ao motor estatístico de geração de apostas.</p>
-        
-        <div id="loginForm">
-          <div style="margin-bottom: 16px;">
-            <label>Usuário</label>
-            <input type="text" id="loginUsername" placeholder="Digite seu usuário" />
-          </div>
-          <div style="margin-bottom: 20px;">
-            <label>Senha</label>
-            <input type="password" id="loginPassword" placeholder="Digite sua senha" />
-          </div>
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-            <button class="btn-primary" id="loginBtn" style="flex: 1; min-width: 150px;">Entrar</button>
-            <button class="btn-secondary" id="toRegisterBtn">Criar Conta</button>
-          </div>
-        </div>
 
-        <div id="registerForm" style="display: none;">
-          <div style="margin-bottom: 16px;">
-            <label>Novo Usuário</label>
-            <input type="text" id="registerUsername" placeholder="Escolha um nome de usuário" />
-          </div>
-          <div style="margin-bottom: 20px;">
-            <label>Senha</label>
-            <input type="password" id="registerPassword" placeholder="Crie uma senha forte" />
-          </div>
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-            <button class="btn-primary" id="registerBtn" style="flex: 1; min-width: 150px;">Cadastrar</button>
-            <button class="btn-secondary" id="toLoginBtn">Voltar para o Login</button>
-          </div>
+    <!-- Tela de Login / Cadastro (Exibida apenas se deslogado) -->
+    <div id="authContainer" class="card" style="max-width: 480px; margin: 40px auto;">
+      <h2 class="section-title" id="authTitle" style="text-align: center; margin-bottom: 8px;">Acesso ao Painel</h2>
+      <p class="hint" id="authHint" style="text-align: center; margin-bottom: 24px;">Faça login ou crie uma conta para visualizar as estatísticas e gerar jogos da Mega-Sena.</p>
+      
+      <div id="loginForm">
+        <div style="margin-bottom: 16px;">
+          <label>Usuário</label>
+          <input type="text" id="loginUsername" placeholder="Digite seu usuário" />
+        </div>
+        <div style="margin-bottom: 20px;">
+          <label>Senha</label>
+          <input type="password" id="loginPassword" placeholder="Digite sua senha" />
+        </div>
+        <!-- Google Sign-In Button -->
+        <div style="margin-bottom: 20px; display: flex; justify-content: center;">
+          <div id="googleBtn"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <button class="btn-primary" id="loginBtn" style="flex: 1; min-width: 150px;">Entrar</button>
+          <button class="btn-secondary" id="toRegisterBtn">Criar Conta</button>
         </div>
       </div>
 
-      <!-- Área do Gerador de Jogos (escondida por padrão) -->
-      <div id="generatorContainer" style="display: none;">
-        <div class="card">
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
-            <h2 class="section-title" style="margin: 0;">Gerador de jogos</h2>
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <span id="userGreeting" style="font-weight: 700; color: var(--accent);">Olá, Usuário!</span>
-              <button class="btn-secondary" id="logoutBtn" style="padding: 6px 12px; font-size: 0.9rem;">Sair</button>
-            </div>
+      <div id="registerForm" style="display: none;">
+        <div style="margin-bottom: 16px;">
+          <label>Nome Completo</label>
+          <input type="text" id="registerName" placeholder="Seu nome" />
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label>E-mail</label>
+          <input type="email" id="registerEmail" placeholder="seu@email.com" />
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label>Novo Usuário</label>
+          <input type="text" id="registerUsername" placeholder="Escolha um nome de usuário" />
+        </div>
+        <div style="margin-bottom: 20px;">
+          <label>Senha</label>
+          <input type="password" id="registerPassword" placeholder="Crie uma senha forte" />
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <button class="btn-primary" id="registerBtn" style="flex: 1; min-width: 150px;">Cadastrar</button>
+          <button class="btn-secondary" id="toLoginBtn">Voltar para o Login</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Área da Aplicação Principal (Exibida apenas se logado) -->
+    <div id="appContent" style="display: none;">
+      <div class="stats-grid" id="statsGrid"></div>
+      
+      <div class="tabs">
+        <button class="tab active" data-tab="results">Últimos Resultados</button>
+        <button class="tab" data-tab="frequency">Frequência</button>
+        <button class="tab" data-tab="patterns">Soma & Paridade</button>
+        <button class="tab" data-tab="generator">Gerador</button>
+        <button class="tab" data-tab="users" id="usersTab" style="display: none;">Usuários</button>
+      </div>
+
+      <section class="panel active" id="panel-results">
+        <div class="grid-2">
+          <div class="card">
+            <h2 class="section-title">Últimos concursos</h2>
+            <div class="table-wrap"><table><thead><tr><th>Concurso</th><th>Data</th><th>Dezenas</th></tr></thead><tbody id="resultsTable"></tbody></table></div>
           </div>
+          <div class="card"><h2 class="section-title">Resumo rápido</h2><div id="latestSummary"></div></div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-frequency">
+        <div class="charts">
+          <div class="card"><h2 class="section-title">Frequência histórica</h2><canvas id="freqChart"></canvas></div>
+          <div class="card"><h2 class="section-title">Top atrasos</h2><canvas id="delayChart"></canvas></div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <h2 class="section-title">Tabela de frequência</h2>
+          <div class="table-wrap"><table><thead><tr><th>Número</th><th>Frequência</th><th>Taxa</th><th>Categoria</th><th>Atraso</th><th>Tendência</th></tr></thead><tbody id="frequencyTable"></tbody></table></div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-patterns">
+        <div class="charts">
+          <div class="card"><h2 class="section-title">Distribuição da soma</h2><canvas id="sumChart"></canvas></div>
+          <div class="card"><h2 class="section-title">Distribuição de pares</h2><canvas id="parityChart"></canvas></div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <h2 class="section-title">Regras Históricas Ativas</h2>
+          <p class="hint">O gerador agora usa inteligência estatística avançada extraindo números de Frequência Média.</p>
+          <ul><li>Filtro configurável de <strong>Soma</strong> (Padrão 130 a 230).</li><li><strong>Anti-Trincas</strong>: Proibido gerar 3 números consecutivos.</li><li><strong>Rateio Alto</strong>: Obriga a presença de pelo menos três dezenas maiores que 31.</li><li>Sorteio restrito aos números de frequência "Média".</li></ul>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-generator">
+        <div class="card">
+          <h2 class="section-title">Gerador de jogos</h2>
           <p class="hint">O gerador usa os dados da planilha com filtros históricos, sem SQLite.</p>
           <div class="form-grid">
             <div>
@@ -201,8 +216,63 @@
           <h2 class="section-title">Jogos sugeridos</h2>
           <div class="table-wrap"><table><thead><tr><th>Jogo</th><th>Números</th><th>Soma</th><th>Pares</th><th>Estratégia</th><th>Custo</th><th>Rateio Potencial</th><th>Premios Passados</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
         </div>
+      </section>
+
+      <!-- Painel de Gestão de Usuários (CRUD) -->
+      <section class="panel" id="panel-users">
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+            <h2 class="section-title" style="margin: 0;">Gestão de Usuários</h2>
+            <button class="btn-primary" id="createUserBtn">+ Novo Usuário</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>E-mail</th>
+                  <th>Usuário</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody">
+                <!-- Inserido dinamicamente por JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Modal de Edição/Criação de Usuário (escondido por padrão) -->
+    <div id="userModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; place-items: center; padding: 16px;">
+      <div class="card" style="width: 100%; max-width: 450px; margin: 10% auto; position: relative;">
+        <h3 id="modalTitle" class="section-title" style="margin-bottom: 20px;">Cadastrar Usuário</h3>
+        <input type="hidden" id="modalUserId" />
+        
+        <div style="margin-bottom: 14px;">
+          <label>Nome Completo</label>
+          <input type="text" id="modalName" placeholder="Nome completo" />
+        </div>
+        <div style="margin-bottom: 14px;">
+          <label>E-mail</label>
+          <input type="email" id="modalEmail" placeholder="exemplo@email.com" />
+        </div>
+        <div style="margin-bottom: 14px;">
+          <label>Usuário</label>
+          <input type="text" id="modalUsername" placeholder="Nome de usuário" />
+        </div>
+        <div style="margin-bottom: 20px;">
+          <label>Senha <span id="passwordHint" style="font-weight: normal; font-size: 0.8rem; color: var(--muted);">(deixe em branco para manter a mesma)</span></label>
+          <input type="password" id="modalPassword" placeholder="Senha" />
+        </div>
+        
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button class="btn-secondary" id="closeModalBtn" style="padding: 10px 16px;">Cancelar</button>
+          <button class="btn-primary" id="saveUserBtn" style="padding: 10px 20px;">Salvar</button>
+        </div>
       </div>
-    </section>
+    </div>
   </div>
   <script src="/app.js"></script>
 </body>
