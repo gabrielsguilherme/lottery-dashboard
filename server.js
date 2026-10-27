@@ -22,6 +22,7 @@ try {
 
 const express = require('express');
 const ExcelJS = require('exceljs');
+const JSZip = require('jszip');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -73,12 +74,77 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── Load and parse xlsx ─────────────────────────────────────────────────────
-async function loadDraws() {
-  if (!fs.existsSync(XLSX_PATH)) {
-    throw new Error(`Arquivo não encontrado: ${XLSX_PATH}`);
+async function parseCaixaRawXlsx(filePath) {
+  const buf = fs.readFileSync(filePath);
+  const zip = await JSZip.loadAsync(buf);
+  const sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string');
+
+  const draws = [];
+  const rowRegex = /<(?:x:)?row[^>]*>(.*?)<\/(?:x:)?row>/gs;
+  let match;
+  let isFirst = true;
+
+  while ((match = rowRegex.exec(sheetXml)) !== null) {
+    if (isFirst) {
+      isFirst = false;
+      continue;
+    }
+    const rowContent = match[1];
+    const cellRegex = /<(?:x:)?c[^>]*?(?:t="([^"]*)")?[^>]*>.*?(?:<(?:x:)?v>(.*?)<\/(?:x:)?v>)?<\/(?:x:)?c>/gs;
+    const cells = [];
+    let cellMatch;
+    while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+      cells.push(cellMatch[2] !== undefined ? cellMatch[2] : '');
+    }
+
+    if (cells.length < 8) continue;
+    const concurso = parseInt(cells[0], 10);
+    const dataStr = cells[1];
+    const b1 = parseInt(cells[2], 10);
+    const b2 = parseInt(cells[3], 10);
+    const b3 = parseInt(cells[4], 10);
+    const b4 = parseInt(cells[5], 10);
+    const b5 = parseInt(cells[6], 10);
+    const b6 = parseInt(cells[7], 10);
+
+    if (concurso > 0 && !isNaN(concurso) && !isNaN(b1) && !isNaN(b2) && !isNaN(b3) && !isNaN(b4) && !isNaN(b5) && !isNaN(b6)) {
+      draws.push({
+        concurso,
+        data: dataStr,
+        bolas: [b1, b2, b3, b4, b5, b6].sort((a, b) => a - b),
+      });
+    }
   }
+
+  draws.sort((a, b) => a.concurso - b.concurso);
+  return draws;
+}
+
+async function loadDraws() {
+  const candidates = [
+    path.join(__dirname, 'data', 'Mega-Sena (1).xlsx'),
+    path.join(__dirname, 'data', 'Mega-Sena.xlsx'),
+    path.join(__dirname, 'data', 'MegaSena_Dashboard.xlsx'),
+  ];
+
+  const foundPath = candidates.find(p => fs.existsSync(p));
+  if (!foundPath) {
+    throw new Error(`Nenhuma planilha encontrada em data/ (procurado por: Mega-Sena.xlsx, MegaSena_Dashboard.xlsx)`);
+  }
+
+  // Tenta primeiro via parser direto Caixa (suporta o formato original baixado da Caixa)
+  try {
+    const draws = await parseCaixaRawXlsx(foundPath);
+    if (draws.length > 0) {
+      console.log(`Carregados ${draws.length} concursos via parser Caixa de: ${path.basename(foundPath)}`);
+      return draws;
+    }
+  } catch (err) {
+    // Se não for formato Caixa raw, cai no ExcelJS abaixo
+  }
+
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(XLSX_PATH);
+  await workbook.xlsx.readFile(foundPath);
 
   const sheet = workbook.getWorksheet('📥 DADOS') || workbook.worksheets[0];
   const draws = [];
@@ -116,6 +182,7 @@ async function loadDraws() {
   });
 
   draws.sort((a, b) => a.concurso - b.concurso);
+  console.log(`Carregados ${draws.length} concursos via ExcelJS de: ${path.basename(foundPath)}`);
   return draws;
 }
 
@@ -551,7 +618,7 @@ app.delete('/api/users/:id', authenticateToken, (req, res) => {
   res.json({ success: true, message: 'Usuário excluído com sucesso.' });
 });
 
-app.post('/api/generate', authenticateToken, async (req, res) => {
+app.post('/api/generate', async (req, res) => {
   try {
     const draws = await getDraws();
     const games = generateGames(draws, req.body);
