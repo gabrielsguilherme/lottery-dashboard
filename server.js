@@ -289,7 +289,6 @@ function hasConsecutive(picked) {
 function generateGames(draws, params = {}) {
   const {
     somaMin = 130, somaMax = 230,
-    minPares = 2, maxPares = 4,
     count = 10,
   } = params;
 
@@ -297,46 +296,91 @@ function generateGames(draws, params = {}) {
   const games = [];
   let attempts = 0;
 
-  // Calcula a frequência e isola os números medianos (nem muito nem pouco sorteados)
-  const freq = calcFrequency(draws);
-  const medios = freq.filter(f => f.categoria === 'Médio').map(f => f.numero);
+  // 1. Calcula a frequência histórica para calcular os pesos base
+  const freqList = calcFrequency(draws);
+  const freqMap = {};
+  let minFreq = Infinity;
+  let maxFreq = -Infinity;
+  for (const f of freqList) {
+    freqMap[f.numero] = f.frequencia;
+    if (f.frequencia < minFreq) minFreq = f.frequencia;
+    if (f.frequencia > maxFreq) maxFreq = f.frequencia;
+  }
 
-  // Fallback caso a categoria médio não retorne o suficiente (improvável)
-  const pool = medios.length >= 10 ? medios : Array.from({length: 60}, (_, i) => i + 1);
+  // Pesos base normalizados: números mais frequentes têm leve vantagem probabilística (de 1.0 a 1.5)
+  const baseWeights = {};
+  for (let i = 1; i <= 60; i++) {
+    const f = freqMap[i] || minFreq;
+    baseWeights[i] = 1.0 + 0.5 * ((f - minFreq) / (maxFreq - minFreq || 1));
+  }
+
+  // Contador de aparições de cada dezena dentro do lote atual (Solução B: penalidade por repetição)
+  const batchUsage = {};
+  for (let i = 1; i <= 60; i++) batchUsage[i] = 0;
 
   while (games.length < count && attempts < 500000) {
     attempts++;
-    
-    // Sorteia 6 números EXCLUSIVAMENTE do pool de números medianos
-    const pickedSet = new Set();
-    while (pickedSet.size < 6) {
-      pickedSet.add(pool[Math.floor(Math.random() * pool.length)]);
-    }
-    const picked = Array.from(pickedSet).sort((a, b) => a - b);
 
-    // Cálculos para os filtros
+    // Sorteia 6 dezenas ponderadas pelo peso histórico dividido pela penalidade de repetições no lote
+    const available = Array.from({ length: 60 }, (_, i) => i + 1);
+    const picked = [];
+
+    while (picked.length < 6) {
+      let totalWeight = 0;
+      const weights = [];
+
+      for (const num of available) {
+        // Penalidade proporcional ao quadrado das aparições no lote atual
+        const currentWeight = baseWeights[num] / Math.pow(1 + batchUsage[num], 2);
+        weights.push(currentWeight);
+        totalWeight += currentWeight;
+      }
+
+      let r = Math.random() * totalWeight;
+      let chosenIdx = 0;
+      for (let j = 0; j < available.length; j++) {
+        r -= weights[j];
+        if (r <= 0) {
+          chosenIdx = j;
+          break;
+        }
+      }
+
+      picked.push(available.splice(chosenIdx, 1)[0]);
+    }
+
+    picked.sort((a, b) => a - b);
+
+    // Cálculos para os filtros estatísticos
     const soma = picked.reduce((a, b) => a + b, 0);
     const pares = picked.filter(b => b % 2 === 0).length;
     const nAcima31 = picked.filter(n => n > 31).length;
 
-    // Filtros de validação
+    // Filtros de validação histórica
     if (
-      soma >= somaMin && 
-      soma <= somaMax && 
-      nAcima31 >= 3 && 
+      soma >= somaMin &&
+      soma <= somaMax &&
+      nAcima31 >= 3 &&
       !hasConsecutive(picked)
     ) {
+      // Evita jogo duplicado no mesmo lote
+      const signature = picked.join(',');
+      if (games.some(g => g.numeros.join(',') === signature)) continue;
+
       const premios = checkPastWins(picked, draws);
-      
-      games.push({ 
-        numeros: picked, 
-        soma, 
-        pares, 
-        estrategia: 'Frequência Média', 
+
+      games.push({
+        numeros: picked,
+        soma,
+        pares,
+        estrategia: 'Probabilidade Ponderada + Diversificação',
         premios,
         custo: PRECO_UNITARIO,
-        rateioPotencial: nAcima31 >= 4 ? 'Alto' : 'Normal'
+        rateioPotencial: nAcima31 >= 4 ? 'Alto' : 'Normal',
       });
+
+      // Registra a utilização no lote para atenuar repetições nas próximas combinações
+      picked.forEach(n => batchUsage[n]++);
     }
   }
 
