@@ -212,13 +212,16 @@
           <h2 class="section-title">Gerador de Jogos por Vetor de Conjuntos (P(A ∩ B) + P(B | A))</h2>
           <p class="hint">Selecione abaixo a aba do motor de seleção por vetor e defina a quantidade de jogos que cada modo deve gerar:</p>
 
-          <!-- Abas de escolha entre Modo A e Modo B -->
+          <!-- Abas de escolha entre Modo A, Modo B e Modo C -->
           <div class="tabs" id="genModeTabs" style="margin-top: 10px; margin-bottom: 16px;">
             <button class="tab active" type="button" data-gen-mode="vetor_paginado">
-              Modo A: Vetor 100% Determinístico (Paginado)
+              Modo A: Vetor Determinístico (Paginado)
             </button>
             <button class="tab" type="button" data-gen-mode="vetor_feixe">
-              Modo B: Vetor de Elite (Busca em Feixe Top-3)
+              Modo B: Vetor de Elite (Feixe Top-3)
+            </button>
+            <button class="tab" type="button" data-gen-mode="vetor_nucleo">
+              Modo C: Fechamento Condensado (Fusão de Pivôs)
             </button>
           </div>
 
@@ -264,6 +267,33 @@
                 <input type="number" id="countGamesModoB" value="10" min="1" max="30" />
                 <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 4px;">
                   Quantidade de combinações geradas pelo Modo B (1 a 30).
+                </small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Painel de Configuração do Modo C -->
+          <div id="gen-mode-panel-vetor_nucleo" class="gen-mode-box" style="display: none; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+              <strong style="color: var(--primary);">Modo C — Fechamento Condensado (Fusão de Pontes do Pivô)</strong>
+              <span class="tag hot">Foco em Quina / Sena na Mesma Linha</span>
+            </div>
+            <p class="hint" style="margin-bottom: 12px;">
+              Em vez de separar as dezenas fortes em jogos disjuntos, fixa a <strong>Dupla Pivô Campeã</strong> (ex: <code>05 ∩ 27</code>) e funde na <strong>mesma linha</strong> as dezenas pontes dos outros jogos que têm maior elo mínimo (<em>MinEdge</em>) e média geométrica entre si.
+            </p>
+            <div class="form-grid" style="margin: 0;">
+              <div>
+                <label>Quantidade de Jogos (Modo C)</label>
+                <input type="number" id="countGamesModoC" value="10" min="1" max="30" />
+                <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 4px;">
+                  Quantidade de combinações condensadas geradas pelo Modo C (1 a 30).
+                </small>
+              </div>
+              <div>
+                <label>Dupla Pivô Âncora (0 = Top 1)</label>
+                <input type="number" id="pageOffsetModoC" value="0" min="0" max="4" />
+                <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 4px;">
+                  0 = 1ª dupla campeã (05∩27), 1 = 2ª dupla campeã, etc.
                 </small>
               </div>
             </div>

@@ -25,6 +25,7 @@ function setTabs() {
 
       const panelA = document.getElementById('gen-mode-panel-vetor_paginado');
       const panelB = document.getElementById('gen-mode-panel-vetor_feixe');
+      const panelC = document.getElementById('gen-mode-panel-vetor_nucleo');
       const nextBtn = document.getElementById('nextPageBtnModoA');
       const resetBtn = document.getElementById('resetPageBtnModoA');
       const genBtn = document.getElementById('generateBtn');
@@ -32,15 +33,24 @@ function setTabs() {
       if (state.genMode === 'vetor_paginado') {
         panelA.style.display = 'block';
         panelB.style.display = 'none';
+        panelC.style.display = 'none';
         nextBtn.style.display = 'inline-block';
         resetBtn.style.display = 'inline-block';
         genBtn.textContent = 'Gerar jogos agora (Modo A)';
-      } else {
+      } else if (state.genMode === 'vetor_feixe') {
         panelA.style.display = 'none';
         panelB.style.display = 'block';
+        panelC.style.display = 'none';
         nextBtn.style.display = 'none';
         resetBtn.style.display = 'none';
         genBtn.textContent = 'Gerar lote de elite agora (Modo B)';
+      } else {
+        panelA.style.display = 'none';
+        panelB.style.display = 'none';
+        panelC.style.display = 'block';
+        nextBtn.style.display = 'none';
+        resetBtn.style.display = 'none';
+        genBtn.textContent = 'Gerar fechamento condensado (Modo C)';
       }
       generateGames();
     });
@@ -213,10 +223,14 @@ async function generateGames() {
   const mode = state.genMode || 'vetor_paginado';
   const count = mode === 'vetor_paginado'
     ? Number(document.getElementById('countGamesModoA').value)
-    : Number(document.getElementById('countGamesModoB').value);
+    : mode === 'vetor_feixe'
+      ? Number(document.getElementById('countGamesModoB').value)
+      : Number(document.getElementById('countGamesModoC').value);
   const pageOffset = mode === 'vetor_paginado'
     ? Number(document.getElementById('pageOffsetModoA').value)
-    : 0;
+    : mode === 'vetor_nucleo'
+      ? Number(document.getElementById('pageOffsetModoC').value)
+      : 0;
 
   updateModoABadge();
 

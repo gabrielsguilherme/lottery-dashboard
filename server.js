@@ -401,7 +401,7 @@ function generateGames(draws, params = {}) {
   const somaMin = Number(params.somaMin) || 130;
   const somaMax = Number(params.somaMax) || 230;
   const count = Math.min(Math.max(Number(params.count) || 10, 1), 30);
-  const mode = params.mode === 'vetor_feixe' ? 'vetor_feixe' : 'vetor_paginado'; // 'vetor_paginado' (Modo A) ou 'vetor_feixe' (Modo B)
+  const mode = ['vetor_feixe', 'vetor_nucleo'].includes(params.mode) ? params.mode : 'vetor_paginado';
   const pageOffset = Math.max(Number(params.pageOffset) || 0, 0);
 
   const PRECO_UNITARIO = 5.00;
@@ -482,6 +482,142 @@ function generateGames(draws, params = {}) {
     const testArr = [...partialSet, x].sort((a, b) => a - b);
     if (hasConsecutive(testArr)) return false;
     return true;
+  }
+
+  // ─── Modo C: Fechamento Condensado (Fusão de Pontes do Pivô) ───────────────
+  if (mode === 'vetor_nucleo') {
+    const baseGames = generateGames(draws, { somaMin, somaMax, count: 18, mode: 'vetor_paginado', pageOffset });
+    const anchorPair = allSeedPairs[pageOffset % Math.min(5, allSeedPairs.length)];
+    const a = anchorPair.a;
+    const b = anchorPair.b;
+
+    const g2Full = baseGames[1] ? baseGames[1].numeros : [];
+    const g2Seed = [baseGames[1]?.numeros[0], baseGames[1]?.numeros[5]].filter(Boolean);
+    const g2 = g2Full.filter(n => n !== a && n !== b);
+    const g3 = baseGames[2] ? baseGames[2].numeros.filter(n => n !== a && n !== b) : [];
+
+    const gameWithA = baseGames.find((g, i) => i > 0 && g.numeros.includes(a));
+    const gameWithB = baseGames.find((g, i) => i > 0 && g.numeros.includes(b));
+
+    const gA = gameWithA
+      ? gameWithA.numeros.filter(n => n !== a && n !== b)
+      : allSeedPairs.filter(p => p.a === a || p.b === a).slice(1, 7).map(p => (p.a === a ? p.b : p.a));
+    const gB = gameWithB
+      ? gameWithB.numeros.filter(n => n !== a && n !== b)
+      : allSeedPairs.filter(p => p.a === b || p.b === b).slice(1, 7).map(p => (p.a === b ? p.b : p.a));
+
+    const bridgePool = [...new Set([...g2, ...g3])].filter(n => n !== a && n !== b);
+
+    const cores5 = [];
+    for (const xA of gA) {
+      for (const xB of gB) {
+        if (xA === xB) continue;
+        for (const y1 of bridgePool) {
+          if ([a, b, xA, xB].includes(y1)) continue;
+          const edges = [
+            pairCounts[xA][xB] || 0,
+            pairCounts[y1][xA] || 0,
+            pairCounts[y1][xB] || 0,
+            pairCounts[y1][b] || 0,
+            pairCounts[xA][a] || 0,
+            pairCounts[xB][b] || 0,
+          ];
+          const minE = Math.min(...edges);
+          const geo = Math.pow(edges.reduce((p, q) => p * (q || 0.5), 1), 1 / edges.length);
+          cores5.push({ core: [a, b, xA, xB, y1], xA, xB, y1, minE, geo });
+        }
+      }
+    }
+    cores5.sort((x, y) => y.minE - x.minE || y.geo - x.geo);
+
+    const branchUsage = {};
+
+    for (let k = 0; k < count; k++) {
+      let best = null;
+      const topCores = cores5.slice(0, Math.max(15, count));
+      for (const c of topCores) {
+        const penCore =
+          (1 + 0.7 * (branchUsage[c.xA] || 0)) *
+          (1 + 0.7 * (branchUsage[c.xB] || 0)) *
+          (1 + 0.35 * (branchUsage[c.y1] || 0));
+
+        for (const z of bridgePool) {
+          if (c.core.includes(z)) continue;
+          const nums = [...c.core, z].sort((x, y) => x - y);
+          if (hasConsecutive(nums)) continue;
+          const nAcima31 = nums.filter(n => n > 31).length;
+          if (nAcima31 < 3) continue;
+
+          const sig = nums.join(',');
+          if (games.some(g => g.numeros.join(',') === sig)) continue;
+
+          const sum = nums.reduce((p, q) => p + q, 0);
+          if (sum < somaMin || sum > somaMax) continue;
+
+          const zEdges = [
+            pairCounts[z][c.xA] || 0,
+            pairCounts[z][c.xB] || 0,
+            pairCounts[z][b] || 0,
+          ];
+          const zMin = Math.min(...zEdges);
+          const zGeo = Math.pow(zEdges.reduce((p, q) => p * (q || 0.5), 1), 1 / zEdges.length);
+          const score = (c.minE * 3 + c.geo + zMin * 1.5 + zGeo) / (penCore * (1 + 0.35 * (branchUsage[z] || 0)));
+
+          if (!best || score > best.score) {
+            best = { nums, sig, score, used: [c.xA, c.xB, c.y1, z] };
+          }
+        }
+      }
+
+      if (!best && baseGames[k % baseGames.length]) {
+        best = { nums: baseGames[k % baseGames.length].numeros, used: [] };
+      }
+
+      const picked = best.nums;
+      best.used.forEach(n => { branchUsage[n] = (branchUsage[n] || 0) + 1; });
+
+      let totalPairRatio = 0;
+      let bestPair = { a: picked[0], b: picked[1], count: 0 };
+      let newPairsCount = 0;
+      const gamePairs = [];
+
+      for (let i = 0; i < picked.length; i++) {
+        for (let j = i + 1; j < picked.length; j++) {
+          const pA = picked[i];
+          const pB = picked[j];
+          const key = `${pA}-${pB}`;
+          gamePairs.push(key);
+          if (!usedPairsInBatch.has(key)) newPairsCount++;
+          const c = pairCounts[pA][pB] || 0;
+          totalPairRatio += expectedPairCount > 0 ? c / expectedPairCount : 1;
+          if (c > bestPair.count) {
+            bestPair = { a: pA, b: pB, count: c };
+          }
+        }
+      }
+      gamePairs.forEach(key => usedPairsInBatch.add(key));
+
+      const soma = picked.reduce((p, q) => p + q, 0);
+      const pares = picked.filter(x => x % 2 === 0).length;
+      const nAcima31 = picked.filter(x => x > 31).length;
+      const premios = checkPastWins(picked, draws);
+      const afinidadeMedia = Number((totalPairRatio / 15).toFixed(2));
+
+      games.push({
+        numeros: picked,
+        soma,
+        pares,
+        afinidadeMedia,
+        parMaisForte: `${String(bestPair.a).padStart(2, '0')} e ${String(bestPair.b).padStart(2, '0')} (${bestPair.count}x)`,
+        paresIneditos: `Pivô ${String(a).padStart(2, '0')}∩${String(b).padStart(2, '0')} (${newPairsCount} novos)`,
+        estrategia: `Modo C: Fusão de Pivô (${String(a).padStart(2, '0')}∩${String(b).padStart(2, '0')})`,
+        premios,
+        custo: PRECO_UNITARIO,
+        rateioPotencial: nAcima31 >= 4 ? 'Alto' : 'Normal',
+      });
+    }
+
+    return games;
   }
 
   // No Modo A (Paginado), deslocamos o ponto de partida no vetor de sementes conforme a página
