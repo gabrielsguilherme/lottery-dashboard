@@ -398,18 +398,20 @@ function hasConsecutive(picked) {
 }
 
 function generateGames(draws, params = {}) {
-  const {
-    somaMin = 130, somaMax = 230,
-    count = 10,
-  } = params;
+  const somaMin = Number(params.somaMin) || 130;
+  const somaMax = Number(params.somaMax) || 230;
+  const count = Math.min(Math.max(Number(params.count) || 10, 1), 30);
+  const mode = params.mode === 'vetor_feixe' ? 'vetor_feixe' : 'vetor_paginado'; // 'vetor_paginado' (Modo A) ou 'vetor_feixe' (Modo B)
+  const pageOffset = Math.max(Number(params.pageOffset) || 0, 0);
 
   const PRECO_UNITARIO = 5.00;
-  const games = [];
-  let attempts = 0;
+  const N = 60;
+  const T = draws.length || 1;
 
-  // 1. Frequência individual + Matriz de Coocorrência (Teoria dos Conjuntos)
+  // 1. Frequência individual P(A) + Matriz de Coocorrência P(A ∩ B) e Condicional P(B | A)
   const freqList = calcFrequency(draws);
   const { pairCounts, expectedPairCount } = calcSetTheory(draws);
+  const expectedCondProb = 5 / (N - 1); // ~8.47%
 
   const freqMap = {};
   let minFreq = Infinity;
@@ -420,75 +422,231 @@ function generateGames(draws, params = {}) {
     if (f.frequencia > maxFreq) maxFreq = f.frequencia;
   }
 
-  // Pesos base normalizados: números mais frequentes têm leve vantagem probabilística (de 1.0 a 1.5)
+  // Vetor de peso marginal individual P(A) normalizado (1.0 a 1.35)
   const baseWeights = {};
-  for (let i = 1; i <= 60; i++) {
+  for (let i = 1; i <= N; i++) {
     const f = freqMap[i] || minFreq;
-    baseWeights[i] = 1.0 + 0.5 * ((f - minFreq) / (maxFreq - minFreq || 1));
+    baseWeights[i] = 1.0 + 0.35 * ((f - minFreq) / (maxFreq - minFreq || 1));
   }
 
-  // Contador de aparições de cada dezena no lote (Solução B) + Pares usados no lote (|J_i ∩ J_k| <= 1)
+  // Matriz de Sinergia Combinada (Probabilidade Conjunta P(A∩B) + Probabilidade Condicional P(B|A))
+  const pairSynergy = Array.from({ length: N + 1 }, () => new Array(N + 1).fill(1));
+  const allSeedPairs = [];
+
+  for (let a = 1; a <= N; a++) {
+    for (let b = a + 1; b <= N; b++) {
+      const c = pairCounts[a][b] || 0;
+      const ratioJoint = expectedPairCount > 0 ? c / expectedPairCount : 1;
+      const confAB = freqMap[a] > 0 ? c / freqMap[a] : 0;
+      const confBA = freqMap[b] > 0 ? c / freqMap[b] : 0;
+      const ratioCond = expectedCondProb > 0 ? ((confAB + confBA) / 2) / expectedCondProb : 1;
+
+      // Score combina 50% Prob. Conjunta P(A∩B) + 50% Prob. Condicional P(B|A)
+      const score = 0.5 * ratioJoint + 0.5 * ratioCond;
+      pairSynergy[a][b] = score;
+      pairSynergy[b][a] = score;
+
+      allSeedPairs.push({ a, b, count: c, score, ratioJoint });
+    }
+  }
+
+  // Ordena o vetor mestre de pares do maior para o menor score
+  allSeedPairs.sort((x, y) => y.score - x.score || y.count - x.count);
+
   const batchUsage = {};
-  for (let i = 1; i <= 60; i++) batchUsage[i] = 0;
+  for (let i = 1; i <= N; i++) batchUsage[i] = 0;
   const usedPairsInBatch = new Set();
+  const games = [];
 
-  while (games.length < count && attempts < 500000) {
-    attempts++;
+  // Função auxiliar: pontua um candidato x em relação ao subconjunto parcial J já escolhido
+  function scoreCandidateWithSet(x, partialSet) {
+    let sumSynergy = 0;
+    for (const y of partialSet) {
+      sumSynergy += pairSynergy[x][y];
+    }
+    const avgSynergy = sumSynergy / partialSet.length;
+    // Aplica penalidade moderada de repetição no lote para equilibrar cobertura e sinergia alta
+    const usagePenalty = Math.pow(1 + 0.22 * batchUsage[x], 1.5);
+    return (avgSynergy * baseWeights[x]) / usagePenalty;
+  }
 
-    const available = Array.from({ length: 60 }, (_, i) => i + 1);
-    const picked = [];
+  // Verifica se o candidato x pode entrar no conjunto parcial sem violar |J_i ∩ J_k| <= 1
+  function canAddCandidate(x, partialSet, strictDisjoint = true) {
+    if (partialSet.includes(x)) return false;
+    if (strictDisjoint) {
+      for (const y of partialSet) {
+        const key = x < y ? `${x}-${y}` : `${y}-${x}`;
+        if (usedPairsInBatch.has(key)) return false;
+      }
+    }
+    const testArr = [...partialSet, x].sort((a, b) => a - b);
+    if (hasConsecutive(testArr)) return false;
+    return true;
+  }
 
-    while (picked.length < 6) {
-      let totalWeight = 0;
-      const weights = [];
+  // No Modo A (Paginado), deslocamos o ponto de partida no vetor de sementes conforme a página
+  const seedStartOffset = mode === 'vetor_paginado' ? (pageOffset * count * 2) % Math.max(allSeedPairs.length - count * 5, 1) : 0;
 
-      for (const num of available) {
-        // Penalidade de saturação da dezena no lote
-        let currentWeight = baseWeights[num] / Math.pow(1 + batchUsage[num], 2);
+  for (let gIdx = 0; gIdx < count; gIdx++) {
+    let bestClique = null;
 
-        // Teoria dos Conjuntos: Sinergia condicional P(num | já escolhidos no jogo)
-        // e penalização severa caso forme um par já usado em outro jogo do lote
-        if (picked.length > 0) {
-          let affinitySum = 0;
-          let createsRepeatedPair = false;
-          for (const prev of picked) {
-            const pairKey = prev < num ? `${prev}-${num}` : `${num}-${prev}`;
-            if (usedPairsInBatch.has(pairKey)) {
-              createsRepeatedPair = true;
-            }
-            const coCount = pairCounts[prev][num] || 0;
-            affinitySum += expectedPairCount > 0 ? coCount / expectedPairCount : 1;
+    // Monta o vetor de sementes disponíveis para abrir este jogo
+    const candidateSeeds = [];
+    for (let idx = seedStartOffset; idx < allSeedPairs.length; idx++) {
+      const sp = allSeedPairs[idx];
+      const key = `${sp.a}-${sp.b}`;
+      if (usedPairsInBatch.has(key)) continue;
+
+      const penaltyA = Math.pow(1 + 0.25 * batchUsage[sp.a], 1.5);
+      const penaltyB = Math.pow(1 + 0.25 * batchUsage[sp.b], 1.5);
+      const effectiveSeedScore = (sp.score * baseWeights[sp.a] * baseWeights[sp.b]) / (penaltyA * penaltyB);
+
+      candidateSeeds.push({ ...sp, effectiveSeedScore });
+      if (candidateSeeds.length >= 60) break;
+    }
+
+    candidateSeeds.sort((x, y) => y.effectiveSeedScore - x.effectiveSeedScore);
+
+    // Define quantas sementes do topo do vetor explorar:
+    // Modo A testa as 8 melhores sementes em ordem determinística; Modo B sorteia entre o Top 3 do feixe
+    const topSeedsToTry = candidateSeeds.slice(0, 8);
+    if (mode === 'vetor_feixe') {
+      const top3 = topSeedsToTry.slice(0, 3);
+      shuffle(top3);
+      topSeedsToTry.splice(0, top3.length, ...top3);
+    }
+
+    const globalCandidateCliques = [];
+
+    for (const seed of topSeedsToTry) {
+      const partial2 = [seed.a, seed.b];
+
+      // Vetor ordenado para a 3ª dezena
+      const vec3 = [];
+      for (let x = 1; x <= N; x++) {
+        if (!canAddCandidate(x, partial2, true)) continue;
+        vec3.push({ num: x, score: scoreCandidateWithSet(x, partial2) });
+      }
+      vec3.sort((a, b) => b.score - a.score);
+
+      const branch3 = vec3.slice(0, 3);
+      if (mode === 'vetor_feixe') shuffle(branch3);
+
+      for (const c3 of branch3) {
+        const partial3 = [...partial2, c3.num];
+
+        // Vetor ordenado para a 4ª dezena
+        const vec4 = [];
+        for (let x = 1; x <= N; x++) {
+          if (!canAddCandidate(x, partial3, true)) continue;
+          vec4.push({ num: x, score: scoreCandidateWithSet(x, partial3) });
+        }
+        vec4.sort((a, b) => b.score - a.score);
+
+        const branch4 = vec4.slice(0, 3);
+        if (mode === 'vetor_feixe') shuffle(branch4);
+
+        for (const c4 of branch4) {
+          const partial4 = [...partial3, c4.num];
+          const sum4 = partial4.reduce((a, b) => a + b, 0);
+
+          // Vetor ordenado de candidatos finais para a 5ª e 6ª dezenas
+          const vec56 = [];
+          for (let x = 1; x <= N; x++) {
+            if (!canAddCandidate(x, partial4, true)) continue;
+            vec56.push({ num: x, score: scoreCandidateWithSet(x, partial4) });
           }
-          const avgAffinity = affinitySum / picked.length;
-          // Impulsiona dezenas que possuem sinergia histórica (A ∩ B) com as dezenas já presentes no jogo
-          currentWeight *= Math.pow(avgAffinity, 1.3);
+          vec56.sort((a, b) => b.score - a.score);
 
-          // Cobertura Máxima de Conjuntos (|J_i ∩ J_k| <= 1): evita repetir duplas já sorteadas no lote
-          if (createsRepeatedPair && attempts < 200000) {
-            currentWeight *= 0.001;
+          const topPool = vec56.slice(0, 16);
+
+          for (let i = 0; i < topPool.length; i++) {
+            for (let j = i + 1; j < topPool.length; j++) {
+              const n5 = topPool[i].num;
+              const n6 = topPool[j].num;
+              const totalSum = sum4 + n5 + n6;
+              if (totalSum < somaMin || totalSum > somaMax) continue;
+
+              const key56 = n5 < n6 ? `${n5}-${n6}` : `${n6}-${n5}`;
+              if (usedPairsInBatch.has(key56)) continue;
+
+              const fullSet = [...partial4, n5, n6].sort((a, b) => a - b);
+              if (hasConsecutive(fullSet)) continue;
+
+              const nAcima31 = fullSet.filter(n => n > 31).length;
+              if (nAcima31 < 3) continue;
+
+              const sig = fullSet.join(',');
+              if (games.some(g => g.numeros.join(',') === sig)) continue;
+
+              // Calcula a pontuação real dos 15 pares C(6,2) do conjunto completo + penalidade leve de repetição no lote
+              let sum15Synergy = 0;
+              for (let p1 = 0; p1 < 6; p1++) {
+                for (let p2 = p1 + 1; p2 < 6; p2++) {
+                  sum15Synergy += pairSynergy[fullSet[p1]][fullSet[p2]];
+                }
+              }
+              let usagePen = 1;
+              for (const num of fullSet) {
+                usagePen *= (1 + 0.15 * batchUsage[num]);
+              }
+              const cliqueScore = (sum15Synergy / 15) / Math.pow(usagePen, 0.25);
+              globalCandidateCliques.push({ numeros: fullSet, cliqueScore, rawSynergy: sum15Synergy / 15, sig });
+            }
           }
         }
-
-        weights.push(currentWeight);
-        totalWeight += currentWeight;
       }
+      if (mode === 'vetor_paginado' && globalCandidateCliques.length >= 25) break;
+      if (mode === 'vetor_feixe' && globalCandidateCliques.length >= 35) break;
+    }
 
-      let r = Math.random() * totalWeight;
-      let chosenIdx = 0;
-      for (let j = 0; j < available.length; j++) {
-        r -= weights[j];
-        if (r <= 0) {
-          chosenIdx = j;
+    if (globalCandidateCliques.length > 0) {
+      // Remove assinaturas duplicadas mantendo o maior score
+      const uniqueMap = new Map();
+      for (const cl of globalCandidateCliques) {
+        if (!uniqueMap.has(cl.sig) || uniqueMap.get(cl.sig).cliqueScore < cl.cliqueScore) {
+          uniqueMap.set(cl.sig, cl);
+        }
+      }
+      const uniqueCliques = Array.from(uniqueMap.values()).sort((a, b) => b.cliqueScore - a.cliqueScore);
+
+      if (mode === 'vetor_paginado') {
+        bestClique = uniqueCliques[0];
+      } else {
+        const eliteTop = uniqueCliques.slice(0, Math.min(3, uniqueCliques.length));
+        bestClique = eliteTop[Math.floor(Math.random() * eliteTop.length)];
+      }
+    }
+
+    // Fallback de segurança caso a janela de soma escolhida pelo usuário seja extremamente estreita
+    if (!bestClique) {
+      for (const seed of candidateSeeds) {
+        const picked = [seed.a, seed.b];
+        const rem = [];
+        for (let x = 1; x <= N; x++) {
+          if (x !== seed.a && x !== seed.b) {
+            rem.push({ num: x, score: scoreCandidateWithSet(x, picked) });
+          }
+        }
+        rem.sort((a, b) => b.score - a.score);
+        for (const r of rem) {
+          if (picked.length < 6 && !hasConsecutive([...picked, r.num].sort((a, b) => a - b))) {
+            picked.push(r.num);
+          }
+        }
+        picked.sort((a, b) => a - b);
+        const s = picked.reduce((a, b) => a + b, 0);
+        if (s >= somaMin && s <= somaMax) {
+          bestClique = { numeros: picked };
           break;
         }
       }
-
-      picked.push(available.splice(chosenIdx, 1)[0]);
+      if (!bestClique) {
+        bestClique = { numeros: [5, 10, 27, 33, 42, 53] };
+      }
     }
 
-    picked.sort((a, b) => a - b);
-
-    // Extrai os 15 pares (subconjuntos de tamanho 2) do jogo
+    const picked = bestClique.numeros;
     const gamePairs = [];
     let overlapPairs = 0;
     let totalPairRatio = 0;
@@ -510,44 +668,30 @@ function generateGames(draws, params = {}) {
       }
     }
 
-    // Garante |J_i ∩ J_k| <= 1 (nenhum par repetido entre os jogos do lote)
-    if (overlapPairs > 0 && attempts < 250000) continue;
-
-    // Cálculos para os filtros estatísticos
     const soma = picked.reduce((a, b) => a + b, 0);
     const pares = picked.filter(b => b % 2 === 0).length;
     const nAcima31 = picked.filter(n => n > 31).length;
+    const premios = checkPastWins(picked, draws);
+    const afinidadeMedia = (totalPairRatio / 15).toFixed(2);
+    const paresIneditos = 15 - overlapPairs;
 
-    // Filtros de validação histórica
-    if (
-      soma >= somaMin &&
-      soma <= somaMax &&
-      nAcima31 >= 3 &&
-      !hasConsecutive(picked)
-    ) {
-      const signature = picked.join(',');
-      if (games.some(g => g.numeros.join(',') === signature)) continue;
+    games.push({
+      numeros: picked,
+      soma,
+      pares,
+      afinidadeMedia: Number(afinidadeMedia),
+      parMaisForte: `${String(bestPair.a).padStart(2, '0')} e ${String(bestPair.b).padStart(2, '0')} (${bestPair.count}x)`,
+      paresIneditos: `${paresIneditos}/15`,
+      estrategia: mode === 'vetor_paginado'
+        ? `Modo A: Vetor Determinístico (Pág. ${pageOffset + 1})`
+        : 'Modo B: Vetor Feixe Top-3',
+      premios,
+      custo: PRECO_UNITARIO,
+      rateioPotencial: nAcima31 >= 4 ? 'Alto' : 'Normal',
+    });
 
-      const premios = checkPastWins(picked, draws);
-      const afinidadeMedia = (totalPairRatio / 15).toFixed(2);
-      const paresIneditos = 15 - overlapPairs;
-
-      games.push({
-        numeros: picked,
-        soma,
-        pares,
-        afinidadeMedia: Number(afinidadeMedia),
-        parMaisForte: `${String(bestPair.a).padStart(2, '0')} e ${String(bestPair.b).padStart(2, '0')} (${bestPair.count}x)`,
-        paresIneditos: `${paresIneditos}/15`,
-        estrategia: 'Sinergia A∩B + Cobertura Disjunta',
-        premios,
-        custo: PRECO_UNITARIO,
-        rateioPotencial: nAcima31 >= 4 ? 'Alto' : 'Normal',
-      });
-
-      picked.forEach(n => batchUsage[n]++);
-      gamePairs.forEach(k => usedPairsInBatch.add(k));
-    }
+    picked.forEach(n => batchUsage[n]++);
+    gamePairs.forEach(k => usedPairsInBatch.add(k));
   }
 
   return games;

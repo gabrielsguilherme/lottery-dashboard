@@ -209,39 +209,96 @@
 
       <section class="panel" id="panel-generator">
         <div class="card">
-          <h2 class="section-title">Gerador de jogos (Teoria dos Conjuntos + Sinergia A∩B)</h2>
-          <p class="hint">Gera jogos maximizando a afinidade interna dos pares e garantindo cobertura disjunta (zero pares repetidos entre os jogos do lote).</p>
+          <h2 class="section-title">Gerador de Jogos por Vetor de Conjuntos (P(A ∩ B) + P(B | A))</h2>
+          <p class="hint">Selecione abaixo a aba do motor de seleção por vetor e defina a quantidade de jogos que cada modo deve gerar:</p>
+
+          <!-- Abas de escolha entre Modo A e Modo B -->
+          <div class="tabs" id="genModeTabs" style="margin-top: 10px; margin-bottom: 16px;">
+            <button class="tab active" type="button" data-gen-mode="vetor_paginado">
+              Modo A: Vetor 100% Determinístico (Paginado)
+            </button>
+            <button class="tab" type="button" data-gen-mode="vetor_feixe">
+              Modo B: Vetor de Elite (Busca em Feixe Top-3)
+            </button>
+          </div>
+
+          <!-- Painel de Configuração do Modo A -->
+          <div id="gen-mode-panel-vetor_paginado" class="gen-mode-box" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+              <strong style="color: var(--primary);">Modo A — Ranking Estrito do Vetor (Sem Sorteio)</strong>
+              <span class="tag hot" id="modoAPageBadge">Página 1 (Top 1 a 10)</span>
+            </div>
+            <p class="hint" style="margin-bottom: 12px;">
+              Ordena todos os pares e candidatos do maior para o menor score de <strong>P(A ∩ B) + P(B | A)</strong> e seleciona sempre o 1º colocado absoluto do vetor (<code>vetor[0]</code>). Você pode avançar pelas páginas de conjuntos disjuntos.
+            </p>
+            <div class="form-grid" style="margin: 0;">
+              <div>
+                <label>Quantidade de Jogos (Modo A)</label>
+                <input type="number" id="countGamesModoA" value="10" min="1" max="30" />
+                <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 4px;">
+                  Quantidade de combinações geradas por página no Modo A (1 a 30).
+                </small>
+              </div>
+              <div>
+                <label>Página do Vetor (0 = Top 1)</label>
+                <input type="number" id="pageOffsetModoA" value="0" min="0" max="50" />
+                <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 4px;">
+                  0 = 1ª página (Top 1–N), 1 = 2ª página (Top N+1–2N), etc.
+                </small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Painel de Configuração do Modo B -->
+          <div id="gen-mode-panel-vetor_feixe" class="gen-mode-box" style="display: none; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+              <strong style="color: var(--primary);">Modo B — Busca em Feixe nos Top 3 do Vetor (*Beam Search*)</strong>
+              <span class="tag mid">Variação de Elite (Top-3)</span>
+            </div>
+            <p class="hint" style="margin-bottom: 12px;">
+              Corta fora 95% das dezenas e explora apenas os <strong>Top 3 melhores candidatos do vetor</strong> em cada posição do conjunto, gerando lotes inéditos de altíssima sinergia a cada clique sem cair para o final da fila.
+            </p>
+            <div class="form-grid" style="margin: 0;">
+              <div>
+                <label>Quantidade de Jogos (Modo B)</label>
+                <input type="number" id="countGamesModoB" value="10" min="1" max="30" />
+                <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 4px;">
+                  Quantidade de combinações geradas pelo Modo B (1 a 30).
+                </small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Parâmetros Globais de Soma -->
           <div class="form-grid">
             <div>
               <label>Soma mínima</label>
               <input type="number" id="somaMin" value="130" />
               <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 6px; line-height: 1.3;">
-                define o menor valor permitido para a soma das dezenas de um jogo; qualquer combinação cuja soma total fique abaixo desse limite é descartada.
+                Menor valor permitido para a soma das 6 dezenas do conjunto.
               </small>
             </div>
             <div>
               <label>Soma máxima</label>
               <input type="number" id="somaMax" value="230" />
               <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 6px; line-height: 1.3;">
-                define o maior valor permitido para a soma das dezenas de um jogo; qualquer combinação cuja soma total ultrapasse esse limite é descartada.
-              </small>
-            </div>
-            <div>
-              <label>Quantidade</label>
-              <input type="number" id="countGames" value="10" min="1" max="30" />
-              <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 6px; line-height: 1.3;">
-                define quantos jogos válidos o sistema deve gerar após aplicar todos os filtros configurados.
+                Maior valor permitido para a soma das 6 dezenas do conjunto.
               </small>
             </div>
           </div>
-          <button class="btn-primary" id="generateBtn">Gerar jogos agora</button>
+
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+            <button class="btn-primary" id="generateBtn">Gerar jogos agora (Modo A)</button>
+            <button class="btn-secondary" id="nextPageBtnModoA" type="button">Próxima Página do Vetor (+1)</button>
+            <button class="btn-secondary" id="resetPageBtnModoA" type="button">Voltar ao Top 1</button>
+          </div>
         </div>
         <div class="card" style="margin-top:16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
             <h2 class="section-title" style="margin: 0;">Jogos sugeridos</h2>
             <div id="batchSetSummary" style="font-size: 0.85rem; color: var(--accent); font-weight: 700;"></div>
           </div>
-          <div class="table-wrap"><table><thead><tr><th>Jogo</th><th>Números</th><th>Soma</th><th>Pares</th><th>Sinergia (A∩B)</th><th>Par Mais Forte</th><th>Pares Inéditos</th><th>Custo</th><th>Rateio Potencial</th><th>Premios Passados</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Jogo</th><th>Números</th><th>Soma</th><th>Pares</th><th>Sinergia (A∩B)</th><th>Par Mais Forte</th><th>Pares Inéditos</th><th>Modo / Estratégia</th><th>Custo</th><th>Rateio</th><th>Histórico</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
         </div>
       </section>
     </div>

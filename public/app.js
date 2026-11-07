@@ -1,4 +1,4 @@
-const state = { stats: null, draws: [], frequency: [], charts: {} };
+const state = { stats: null, draws: [], frequency: [], sets: null, genMode: 'vetor_paginado', charts: {} };
 
 async function api(url, options) {
   const res = await fetch(url, options);
@@ -7,12 +7,42 @@ async function api(url, options) {
 }
 
 function setTabs() {
-  document.querySelectorAll('.tab').forEach(tab => {
+  document.querySelectorAll('.tab[data-tab]').forEach(tab => {
     tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab[data-tab]').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(`panel-${tab.dataset.tab}`).classList.add('active');
+    });
+  });
+
+  // Abas internas do Gerador (Modo A vs Modo B)
+  document.querySelectorAll('.tab[data-gen-mode]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab[data-gen-mode]').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      state.genMode = tab.dataset.genMode;
+
+      const panelA = document.getElementById('gen-mode-panel-vetor_paginado');
+      const panelB = document.getElementById('gen-mode-panel-vetor_feixe');
+      const nextBtn = document.getElementById('nextPageBtnModoA');
+      const resetBtn = document.getElementById('resetPageBtnModoA');
+      const genBtn = document.getElementById('generateBtn');
+
+      if (state.genMode === 'vetor_paginado') {
+        panelA.style.display = 'block';
+        panelB.style.display = 'none';
+        nextBtn.style.display = 'inline-block';
+        resetBtn.style.display = 'inline-block';
+        genBtn.textContent = 'Gerar jogos agora (Modo A)';
+      } else {
+        panelA.style.display = 'none';
+        panelB.style.display = 'block';
+        nextBtn.style.display = 'none';
+        resetBtn.style.display = 'none';
+        genBtn.textContent = 'Gerar lote de elite agora (Modo B)';
+      }
+      generateGames();
     });
   });
 }
@@ -168,11 +198,34 @@ function renderConditionalPartners(sets, baseNum) {
   `).join('');
 }
 
+function updateModoABadge() {
+  const countA = Math.min(Math.max(Number(document.getElementById('countGamesModoA').value) || 10, 1), 30);
+  const pageOffset = Math.max(Number(document.getElementById('pageOffsetModoA').value) || 0, 0);
+  const startRank = pageOffset * countA + 1;
+  const endRank = (pageOffset + 1) * countA;
+  const badge = document.getElementById('modoAPageBadge');
+  if (badge) {
+    badge.textContent = `Página ${pageOffset + 1} (Top ${startRank} a ${endRank})`;
+  }
+}
+
 async function generateGames() {
+  const mode = state.genMode || 'vetor_paginado';
+  const count = mode === 'vetor_paginado'
+    ? Number(document.getElementById('countGamesModoA').value)
+    : Number(document.getElementById('countGamesModoB').value);
+  const pageOffset = mode === 'vetor_paginado'
+    ? Number(document.getElementById('pageOffsetModoA').value)
+    : 0;
+
+  updateModoABadge();
+
   const body = {
     somaMin: Number(document.getElementById('somaMin').value),
     somaMax: Number(document.getElementById('somaMax').value),
-    count: Number(document.getElementById('countGames').value),
+    count,
+    mode,
+    pageOffset,
   };
 
   try {
@@ -197,7 +250,7 @@ async function generateGames() {
     });
     const totalPossiblePairsInBatch = games.length * 15;
     document.getElementById('batchSetSummary').innerHTML =
-      `Cobertura do Lote: ${uniqueNums.size}/60 dezenas distintas | ${uniquePairs.size}/${totalPossiblePairsInBatch} pares distintos (|Jᵢ ∩ Jₖ| ≤ 1)`;
+      `Cobertura do Lote (${games.length} jogos): ${uniqueNums.size}/60 dezenas distintas | ${uniquePairs.size}/${totalPossiblePairsInBatch} pares distintos (|Jᵢ ∩ Jₖ| ≤ 1)`;
 
     document.getElementById('gamesTable').innerHTML = games.map((g, i) => `
       <tr>
@@ -205,9 +258,10 @@ async function generateGames() {
         <td><div class="balls">${g.numeros.map(n => `<span class="ball">${String(n).padStart(2, '0')}</span>`).join('')}</div></td>
         <td>${g.soma}</td>
         <td>${g.pares}P/${6 - g.pares}I</td>
-        <td><span class="tag ${g.afinidadeMedia >= 1.05 ? 'hot' : 'mid'}">${g.afinidadeMedia}x</span></td>
+        <td><span class="tag ${g.afinidadeMedia >= 1.15 ? 'hot' : 'mid'}">${g.afinidadeMedia}x</span></td>
         <td><strong>${g.parMaisForte || '-'}</strong></td>
         <td><span class="tag mid">${g.paresIneditos || '15/15'}</span></td>
+        <td><span class="tag ${mode === 'vetor_paginado' ? 'hot' : 'mid'}">${g.estrategia}</span></td>
         <td>R$ ${g.custo.toFixed(2)}</td>
         <td>${g.rateioPotencial === 'Alto' ? '<span class="tag hot">Alto</span>' : '<span class="tag mid">Normal</span>'}</td>
         <td>${g.premios.sena > 0 ? '<strong>Sena!</strong>' : `${g.premios.quina}Q / ${g.premios.quadra}q`}</td>
@@ -228,6 +282,20 @@ async function loadAll() {
 }
 
 document.getElementById('generateBtn').addEventListener('click', generateGames);
+
+document.getElementById('nextPageBtnModoA').addEventListener('click', () => {
+  const pageInput = document.getElementById('pageOffsetModoA');
+  pageInput.value = Number(pageInput.value || 0) + 1;
+  generateGames();
+});
+
+document.getElementById('resetPageBtnModoA').addEventListener('click', () => {
+  document.getElementById('pageOffsetModoA').value = 0;
+  generateGames();
+});
+
+document.getElementById('countGamesModoA').addEventListener('change', updateModoABadge);
+document.getElementById('pageOffsetModoA').addEventListener('change', updateModoABadge);
 
 document.getElementById('reloadBtn').addEventListener('click', async () => {
   await api('/api/reload');
