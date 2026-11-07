@@ -93,6 +93,81 @@ function renderStatsCharts(stats) {
 
 function destroyChart(name) { if (state.charts[name]) state.charts[name].destroy(); }
 
+function renderSetTheory(sets) {
+  const bestPair = sets.topPairs[0];
+  const bestTrio = sets.topTrios[0];
+
+  document.getElementById('setsStatsGrid').innerHTML = `
+    <div class="card">
+      <div class="stat-label">Pares Possíveis C(60,2)</div>
+      <div class="stat-value">${sets.totalPossiblePairs}</div>
+      <div class="stat-extra">15 pares por jogo de 6 dezenas</div>
+    </div>
+    <div class="card">
+      <div class="stat-label">Esperança Hipergeométrica (Par)</div>
+      <div class="stat-value">${sets.expectedPairCount.toFixed(1)}x</div>
+      <div class="stat-extra">P(A∩B) teórica: ${(sets.expectedPairProb * 100).toFixed(2)}%</div>
+    </div>
+    <div class="card">
+      <div class="stat-label">Dupla Mais Sorteada Junta</div>
+      <div class="stat-value">${String(bestPair.a).padStart(2, '0')} e ${String(bestPair.b).padStart(2, '0')}</div>
+      <div class="stat-extra">${bestPair.count} vezes (${bestPair.vsExpected.toFixed(2)}x o esperado)</div>
+    </div>
+    <div class="card">
+      <div class="stat-label">Trinca Mais Sorteada Junta</div>
+      <div class="stat-value">${bestTrio.numeros.map(n => String(n).padStart(2, '0')).join('-')}</div>
+      <div class="stat-extra">${bestTrio.count} vezes (esperado: ${sets.expectedTrioCount.toFixed(1)}x)</div>
+    </div>
+  `;
+
+  document.getElementById('topPairsTable').innerHTML = sets.topPairs.map(p => `
+    <tr>
+      <td><div class="balls"><span class="ball">${String(p.a).padStart(2, '0')}</span><span class="ball">${String(p.b).padStart(2, '0')}</span></div></td>
+      <td><strong>${p.count}x</strong> <small style="color:var(--muted);">(${(p.support * 100).toFixed(2)}%)</small></td>
+      <td><span class="tag hot">${p.vsExpected.toFixed(2)}x</span></td>
+      <td><strong>${p.lift.toFixed(2)}</strong></td>
+    </tr>
+  `).join('');
+
+  document.getElementById('topTriosTable').innerHTML = sets.topTrios.map(t => `
+    <tr>
+      <td><div class="balls">${t.numeros.map(n => `<span class="ball">${String(n).padStart(2, '0')}</span>`).join('')}</div></td>
+      <td><strong>${t.count}x</strong></td>
+      <td><span class="tag hot">${t.vsExpected.toFixed(2)}x</span></td>
+    </tr>
+  `).join('');
+
+  const selectEl = document.getElementById('selectBaseNumber');
+  if (!selectEl.options.length) {
+    selectEl.innerHTML = Array.from({ length: 60 }, (_, i) => i + 1)
+      .map(n => `<option value="${n}">Dezena ${String(n).padStart(2, '0')}</option>`)
+      .join('');
+    selectEl.value = String(bestPair.a);
+    selectEl.addEventListener('change', () => renderConditionalPartners(sets, Number(selectEl.value)));
+  }
+  renderConditionalPartners(sets, Number(selectEl.value) || bestPair.a);
+}
+
+function renderConditionalPartners(sets, baseNum) {
+  const partners = sets.partnersByNumber[baseNum] || [];
+  document.getElementById('conditionalTable').innerHTML = partners.map(p => `
+    <tr>
+      <td>
+        <div class="balls">
+          <span class="ball" style="background: var(--primary);">${String(baseNum).padStart(2, '0')}</span>
+          <span style="font-weight:700; color:var(--muted);">∩</span>
+          <span class="ball">${String(p.parceiro).padStart(2, '0')}</span>
+        </div>
+      </td>
+      <td><strong>${p.count} vezes</strong></td>
+      <td><strong>${(p.conf * 100).toFixed(1)}%</strong> das vezes que o ${String(baseNum).padStart(2, '0')} saiu</td>
+      <td>${sets.expectedPairCount.toFixed(1)} vezes</td>
+      <td><span class="tag ${p.vsExpected >= 1.2 ? 'hot' : 'mid'}">${p.vsExpected.toFixed(2)}x</span></td>
+      <td><strong>${p.lift.toFixed(2)}</strong></td>
+    </tr>
+  `).join('');
+}
+
 async function generateGames() {
   const body = {
     somaMin: Number(document.getElementById('somaMin').value),
@@ -109,13 +184,30 @@ async function generateGames() {
       body: JSON.stringify(body) 
     });
 
+    // Calcula métricas de cobertura de conjuntos do lote inteiro
+    const uniqueNums = new Set();
+    const uniquePairs = new Set();
+    games.forEach(g => {
+      g.numeros.forEach(n => uniqueNums.add(n));
+      for (let i = 0; i < g.numeros.length; i++) {
+        for (let j = i + 1; j < g.numeros.length; j++) {
+          uniquePairs.add(`${g.numeros[i]}-${g.numeros[j]}`);
+        }
+      }
+    });
+    const totalPossiblePairsInBatch = games.length * 15;
+    document.getElementById('batchSetSummary').innerHTML =
+      `Cobertura do Lote: ${uniqueNums.size}/60 dezenas distintas | ${uniquePairs.size}/${totalPossiblePairsInBatch} pares distintos (|Jᵢ ∩ Jₖ| ≤ 1)`;
+
     document.getElementById('gamesTable').innerHTML = games.map((g, i) => `
       <tr>
-        <td>Jogo ${i + 1}</td>
-        <td><div class="balls">${g.numeros.map(n => `<span class="ball">${n}</span>`).join('')}</div></td>
+        <td><strong>Jogo ${i + 1}</strong></td>
+        <td><div class="balls">${g.numeros.map(n => `<span class="ball">${String(n).padStart(2, '0')}</span>`).join('')}</div></td>
         <td>${g.soma}</td>
-        <td>${g.pares}</td>
-        <td><span class="tag mid">${g.estrategia}</span></td>
+        <td>${g.pares}P/${6 - g.pares}I</td>
+        <td><span class="tag ${g.afinidadeMedia >= 1.05 ? 'hot' : 'mid'}">${g.afinidadeMedia}x</span></td>
+        <td><strong>${g.parMaisForte || '-'}</strong></td>
+        <td><span class="tag mid">${g.paresIneditos || '15/15'}</span></td>
         <td>R$ ${g.custo.toFixed(2)}</td>
         <td>${g.rateioPotencial === 'Alto' ? '<span class="tag hot">Alto</span>' : '<span class="tag mid">Normal</span>'}</td>
         <td>${g.premios.sena > 0 ? '<strong>Sena!</strong>' : `${g.premios.quina}Q / ${g.premios.quadra}q`}</td>
@@ -127,11 +219,11 @@ async function generateGames() {
 }
 
 async function loadAll() {
-  const [stats, draws, frequency] = await Promise.all([
-    api('/api/stats'), api('/api/draws?limit=20'), api('/api/frequency'),
+  const [stats, draws, frequency, sets] = await Promise.all([
+    api('/api/stats'), api('/api/draws?limit=20'), api('/api/frequency'), api('/api/sets'),
   ]);
-  state.stats = stats; state.draws = draws.draws; state.frequency = frequency;
-  renderStats(stats); renderDraws(draws.draws); renderFrequency(frequency); renderStatsCharts(stats);
+  state.stats = stats; state.draws = draws.draws; state.frequency = frequency; state.sets = sets;
+  renderStats(stats); renderDraws(draws.draws); renderFrequency(frequency); renderStatsCharts(stats); renderSetTheory(sets);
   await generateGames();
 }
 

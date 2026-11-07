@@ -253,6 +253,117 @@ function getSomaFaixa(soma) {
   return '280 ou mais';
 }
 
+// ─── Teoria dos Conjuntos (Coocorrência, Probabilidade Condicional e Lift) ──
+function calcSetTheory(draws) {
+  const N = 60;
+  const k = 6;
+  const T = draws.length;
+  const expectedPairProb = (k * (k - 1)) / (N * (N - 1)); // 30 / 3540 = 1 / 118
+  const expectedPairCount = T * expectedPairProb;
+  const expectedTrioProb = (k * (k - 1) * (k - 2)) / (N * (N - 1) * (N - 2)); // 120 / 205320 = 1 / 1711
+  const expectedTrioCount = T * expectedTrioProb;
+
+  const numCounts = new Array(N + 1).fill(0);
+  const pairCounts = Array.from({ length: N + 1 }, () => new Array(N + 1).fill(0));
+  const trioMap = new Map();
+
+  for (const d of draws) {
+    const b = d.bolas;
+    for (let i = 0; i < b.length; i++) {
+      numCounts[b[i]]++;
+      for (let j = i + 1; j < b.length; j++) {
+        pairCounts[b[i]][b[j]]++;
+        pairCounts[b[j]][b[i]]++;
+        for (let m = j + 1; m < b.length; m++) {
+          const key = `${b[i]}-${b[j]}-${b[m]}`;
+          trioMap.set(key, (trioMap.get(key) || 0) + 1);
+        }
+      }
+    }
+  }
+
+  const allPairs = [];
+  const partnersByNumber = {};
+  for (let i = 1; i <= N; i++) partnersByNumber[i] = [];
+
+  for (let i = 1; i <= N; i++) {
+    for (let j = i + 1; j <= N; j++) {
+      const c = pairCounts[i][j];
+      const pA = numCounts[i] / T;
+      const pB = numCounts[j] / T;
+      const pAB = c / T;
+      const lift = pA * pB > 0 ? pAB / (pA * pB) : 0;
+      const vsExpected = expectedPairCount > 0 ? c / expectedPairCount : 0;
+      const confAtoB = numCounts[i] > 0 ? c / numCounts[i] : 0;
+      const confBtoA = numCounts[j] > 0 ? c / numCounts[j] : 0;
+
+      const pairObj = {
+        a: i,
+        b: j,
+        count: c,
+        support: pAB,
+        confAtoB,
+        confBtoA,
+        lift,
+        vsExpected,
+      };
+      allPairs.push(pairObj);
+
+      partnersByNumber[i].push({
+        parceiro: j,
+        count: c,
+        conf: confAtoB,
+        lift,
+        vsExpected,
+      });
+      partnersByNumber[j].push({
+        parceiro: i,
+        count: c,
+        conf: confBtoA,
+        lift,
+        vsExpected,
+      });
+    }
+  }
+
+  for (let i = 1; i <= N; i++) {
+    partnersByNumber[i].sort((x, y) => y.count - x.count || y.lift - x.lift);
+    partnersByNumber[i] = partnersByNumber[i].slice(0, 10);
+  }
+
+  const topPairs = [...allPairs]
+    .sort((x, y) => y.count - x.count || y.lift - x.lift)
+    .slice(0, 20);
+
+  const topLiftPairs = [...allPairs]
+    .sort((x, y) => y.lift - x.lift || y.count - x.count)
+    .slice(0, 20);
+
+  const topTrios = Array.from(trioMap.entries())
+    .map(([key, count]) => ({
+      numeros: key.split('-').map(Number),
+      count,
+      support: count / T,
+      vsExpected: expectedTrioCount > 0 ? count / expectedTrioCount : 0,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 15);
+
+  return {
+    totalDraws: T,
+    totalPossiblePairs: (N * (N - 1)) / 2,
+    expectedPairProb,
+    expectedPairCount,
+    expectedTrioProb,
+    expectedTrioCount,
+    topPairs,
+    topLiftPairs,
+    topTrios,
+    partnersByNumber,
+    pairCounts,
+  };
+}
+
 // ─── Game generator ───────────────────────────────────────────────────────────
 function shuffle(array) {
   for (let i = array.length - 1; i > 0; i--) {
@@ -296,8 +407,10 @@ function generateGames(draws, params = {}) {
   const games = [];
   let attempts = 0;
 
-  // 1. Calcula a frequência histórica para calcular os pesos base
+  // 1. Frequência individual + Matriz de Coocorrência (Teoria dos Conjuntos)
   const freqList = calcFrequency(draws);
+  const { pairCounts, expectedPairCount } = calcSetTheory(draws);
+
   const freqMap = {};
   let minFreq = Infinity;
   let maxFreq = -Infinity;
@@ -314,14 +427,14 @@ function generateGames(draws, params = {}) {
     baseWeights[i] = 1.0 + 0.5 * ((f - minFreq) / (maxFreq - minFreq || 1));
   }
 
-  // Contador de aparições de cada dezena dentro do lote atual (Solução B: penalidade por repetição)
+  // Contador de aparições de cada dezena no lote (Solução B) + Pares usados no lote (|J_i ∩ J_k| <= 1)
   const batchUsage = {};
   for (let i = 1; i <= 60; i++) batchUsage[i] = 0;
+  const usedPairsInBatch = new Set();
 
   while (games.length < count && attempts < 500000) {
     attempts++;
 
-    // Sorteia 6 dezenas ponderadas pelo peso histórico dividido pela penalidade de repetições no lote
     const available = Array.from({ length: 60 }, (_, i) => i + 1);
     const picked = [];
 
@@ -330,8 +443,32 @@ function generateGames(draws, params = {}) {
       const weights = [];
 
       for (const num of available) {
-        // Penalidade proporcional ao quadrado das aparições no lote atual
-        const currentWeight = baseWeights[num] / Math.pow(1 + batchUsage[num], 2);
+        // Penalidade de saturação da dezena no lote
+        let currentWeight = baseWeights[num] / Math.pow(1 + batchUsage[num], 2);
+
+        // Teoria dos Conjuntos: Sinergia condicional P(num | já escolhidos no jogo)
+        // e penalização severa caso forme um par já usado em outro jogo do lote
+        if (picked.length > 0) {
+          let affinitySum = 0;
+          let createsRepeatedPair = false;
+          for (const prev of picked) {
+            const pairKey = prev < num ? `${prev}-${num}` : `${num}-${prev}`;
+            if (usedPairsInBatch.has(pairKey)) {
+              createsRepeatedPair = true;
+            }
+            const coCount = pairCounts[prev][num] || 0;
+            affinitySum += expectedPairCount > 0 ? coCount / expectedPairCount : 1;
+          }
+          const avgAffinity = affinitySum / picked.length;
+          // Impulsiona dezenas que possuem sinergia histórica (A ∩ B) com as dezenas já presentes no jogo
+          currentWeight *= Math.pow(avgAffinity, 1.3);
+
+          // Cobertura Máxima de Conjuntos (|J_i ∩ J_k| <= 1): evita repetir duplas já sorteadas no lote
+          if (createsRepeatedPair && attempts < 200000) {
+            currentWeight *= 0.001;
+          }
+        }
+
         weights.push(currentWeight);
         totalWeight += currentWeight;
       }
@@ -351,6 +488,31 @@ function generateGames(draws, params = {}) {
 
     picked.sort((a, b) => a - b);
 
+    // Extrai os 15 pares (subconjuntos de tamanho 2) do jogo
+    const gamePairs = [];
+    let overlapPairs = 0;
+    let totalPairRatio = 0;
+    let bestPair = { a: picked[0], b: picked[1], count: 0 };
+
+    for (let i = 0; i < picked.length; i++) {
+      for (let j = i + 1; j < picked.length; j++) {
+        const a = picked[i];
+        const b = picked[j];
+        const key = `${a}-${b}`;
+        gamePairs.push(key);
+        if (usedPairsInBatch.has(key)) overlapPairs++;
+
+        const c = pairCounts[a][b] || 0;
+        totalPairRatio += expectedPairCount > 0 ? c / expectedPairCount : 1;
+        if (c > bestPair.count) {
+          bestPair = { a, b, count: c };
+        }
+      }
+    }
+
+    // Garante |J_i ∩ J_k| <= 1 (nenhum par repetido entre os jogos do lote)
+    if (overlapPairs > 0 && attempts < 250000) continue;
+
     // Cálculos para os filtros estatísticos
     const soma = picked.reduce((a, b) => a + b, 0);
     const pares = picked.filter(b => b % 2 === 0).length;
@@ -363,24 +525,28 @@ function generateGames(draws, params = {}) {
       nAcima31 >= 3 &&
       !hasConsecutive(picked)
     ) {
-      // Evita jogo duplicado no mesmo lote
       const signature = picked.join(',');
       if (games.some(g => g.numeros.join(',') === signature)) continue;
 
       const premios = checkPastWins(picked, draws);
+      const afinidadeMedia = (totalPairRatio / 15).toFixed(2);
+      const paresIneditos = 15 - overlapPairs;
 
       games.push({
         numeros: picked,
         soma,
         pares,
-        estrategia: 'Probabilidade Ponderada + Diversificação',
+        afinidadeMedia: Number(afinidadeMedia),
+        parMaisForte: `${String(bestPair.a).padStart(2, '0')} e ${String(bestPair.b).padStart(2, '0')} (${bestPair.count}x)`,
+        paresIneditos: `${paresIneditos}/15`,
+        estrategia: 'Sinergia A∩B + Cobertura Disjunta',
         premios,
         custo: PRECO_UNITARIO,
         rateioPotencial: nAcima31 >= 4 ? 'Alto' : 'Normal',
       });
 
-      // Registra a utilização no lote para atenuar repetições nas próximas combinações
       picked.forEach(n => batchUsage[n]++);
+      gamePairs.forEach(k => usedPairsInBatch.add(k));
     }
   }
 
@@ -415,6 +581,16 @@ app.get('/api/frequency', async (req, res) => {
   try {
     const draws = await getDraws();
     res.json(calcFrequency(draws));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/sets', async (req, res) => {
+  try {
+    const draws = await getDraws();
+    const { pairCounts, ...setsData } = calcSetTheory(draws);
+    res.json(setsData);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

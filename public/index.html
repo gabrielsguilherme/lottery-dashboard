@@ -94,6 +94,7 @@
       <div class="tabs">
         <button class="tab active" data-tab="results">Últimos Resultados</button>
         <button class="tab" data-tab="frequency">Frequência</button>
+        <button class="tab" data-tab="sets">Teoria dos Conjuntos (A∩B)</button>
         <button class="tab" data-tab="patterns">Soma & Paridade</button>
         <button class="tab" data-tab="generator">Gerador</button>
       </div>
@@ -119,22 +120,97 @@
         </div>
       </section>
 
+      <section class="panel" id="panel-sets">
+        <div class="stats-grid" id="setsStatsGrid"></div>
+
+        <div class="card" style="margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+            <div>
+              <h2 class="section-title" style="margin-bottom: 4px;">Probabilidade Condicional P(B | A) — Quem mais sai junto com a sua dezena?</h2>
+              <p class="hint" style="margin-bottom: 0;">Selecione uma dezena (A) para ver quais números (B) mais ocorreram juntos com ela no mesmo sorteio.</p>
+            </div>
+            <div style="min-width: 180px;">
+              <label style="font-size: 0.8rem; font-weight: 700; color: var(--muted); display: block; margin-bottom: 4px;">Dezena Base (A):</label>
+              <select id="selectBaseNumber" style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 700; font-size: 0.95rem;"></select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Par (A ∩ B)</th>
+                  <th>Vezes Juntos</th>
+                  <th>Prob. Condicional P(B | A)</th>
+                  <th>Média Esperada (Hipergeométrica)</th>
+                  <th>Sinergia (Acima da Média)</th>
+                  <th>Índice de Afinidade (Lift)</th>
+                </tr>
+              </thead>
+              <tbody id="conditionalTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid-2" style="grid-template-columns: 1fr 1fr;">
+          <div class="card">
+            <h2 class="section-title">Top 20 Duplas Mais Sorteadas Juntas (A ∩ B)</h2>
+            <p class="hint">Subconjuntos de 2 dezenas com maior coocorrência na história.</p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Dupla</th>
+                    <th>Ocorrências</th>
+                    <th>vs. Esperado</th>
+                    <th>Afinidade (Lift)</th>
+                  </tr>
+                </thead>
+                <tbody id="topPairsTable"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="section-title">Top 15 Trincas Mais Sorteadas Juntas (A ∩ B ∩ C)</h2>
+            <p class="hint">Subconjuntos de 3 dezenas que mais se repetiram juntos.</p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Trinca</th>
+                    <th>Ocorrências</th>
+                    <th>vs. Esperado</th>
+                  </tr>
+                </thead>
+                <tbody id="topTriosTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="panel" id="panel-patterns">
         <div class="charts">
           <div class="card"><h2 class="section-title">Distribuição da soma</h2><canvas id="sumChart"></canvas></div>
           <div class="card"><h2 class="section-title">Distribuição de pares</h2><canvas id="parityChart"></canvas></div>
         </div>
         <div class="card" style="margin-top:16px;">
-          <h2 class="section-title">Regras Históricas Ativas</h2>
-          <p class="hint">O gerador agora usa inteligência estatística avançada extraindo números de Frequência Média.</p>
-          <ul><li>Filtro configurável de <strong>Soma</strong> (Padrão 130 a 230).</li><li><strong>Anti-Trincas</strong>: Proibido gerar 3 números consecutivos.</li><li><strong>Rateio Alto</strong>: Obriga a presença de pelo menos três dezenas maiores que 31.</li><li>Sorteio restrito aos números de frequência "Média".</li></ul>
+          <h2 class="section-title">Regras Históricas e Teoria dos Conjuntos Ativas</h2>
+          <p class="hint">O motor combina filtros estatísticos e cobertura combinatória de subconjuntos:</p>
+          <ul style="padding-left: 20px; line-height: 1.8;">
+            <li>Filtro configurável de <strong>Soma</strong> (Padrão 130 a 230).</li>
+            <li><strong>Anti-Trincas Consecutivas</strong>: Proibido gerar 3 números sequenciais.</li>
+            <li><strong>Rateio Alto</strong>: Obriga a presença de pelo menos três dezenas maiores que 31.</li>
+            <li><strong>Sinergia de Coocorrência P(B | A)</strong>: Prioriza números com afinidade histórica comprovada entre si.</li>
+            <li><strong>Cobertura Disjunta de Conjuntos (|Jᵢ ∩ Jₖ| ≤ 1)</strong>: Garante que nenhuma dupla de dezenas se repita entre os jogos do lote, cobrindo 150 pares distintos em 10 jogos.</li>
+          </ul>
         </div>
       </section>
 
       <section class="panel" id="panel-generator">
         <div class="card">
-          <h2 class="section-title">Gerador de jogos</h2>
-          <p class="hint">O gerador usa os dados da planilha com filtros históricos, sem SQLite.</p>
+          <h2 class="section-title">Gerador de jogos (Teoria dos Conjuntos + Sinergia A∩B)</h2>
+          <p class="hint">Gera jogos maximizando a afinidade interna dos pares e garantindo cobertura disjunta (zero pares repetidos entre os jogos do lote).</p>
           <div class="form-grid">
             <div>
               <label>Soma mínima</label>
@@ -161,8 +237,11 @@
           <button class="btn-primary" id="generateBtn">Gerar jogos agora</button>
         </div>
         <div class="card" style="margin-top:16px;">
-          <h2 class="section-title">Jogos sugeridos</h2>
-          <div class="table-wrap"><table><thead><tr><th>Jogo</th><th>Números</th><th>Soma</th><th>Pares</th><th>Estratégia</th><th>Custo</th><th>Rateio Potencial</th><th>Premios Passados</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+            <h2 class="section-title" style="margin: 0;">Jogos sugeridos</h2>
+            <div id="batchSetSummary" style="font-size: 0.85rem; color: var(--accent); font-weight: 700;"></div>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>Jogo</th><th>Números</th><th>Soma</th><th>Pares</th><th>Sinergia (A∩B)</th><th>Par Mais Forte</th><th>Pares Inéditos</th><th>Custo</th><th>Rateio Potencial</th><th>Premios Passados</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
         </div>
       </section>
     </div>
