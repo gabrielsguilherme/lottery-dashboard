@@ -410,7 +410,7 @@ function generateGames(draws, params = {}) {
 
   // 1. Frequência individual P(A) + Matriz de Coocorrência P(A ∩ B) e Condicional P(B | A)
   const freqList = calcFrequency(draws);
-  const { pairCounts, expectedPairCount } = calcSetTheory(draws);
+  const { pairCounts, expectedPairCount, topPairs } = calcSetTheory(draws);
   const expectedCondProb = 5 / (N - 1); // ~8.47%
 
   const freqMap = {};
@@ -486,18 +486,19 @@ function generateGames(draws, params = {}) {
 
   // ─── Modo C: Fechamento Condensado (Fusão de Pontes do Pivô) ───────────────
   if (mode === 'vetor_nucleo') {
-    const baseGames = generateGames(draws, { somaMin, somaMax, count: 18, mode: 'vetor_paginado', pageOffset });
-    const anchorPair = allSeedPairs[pageOffset % Math.min(5, allSeedPairs.length)];
+    const baseGames = generateGames(draws, { somaMin, somaMax, count: 18, mode: 'vetor_paginado', pageOffset: 0 });
+    const anchorPair = topPairs[pageOffset % Math.min(5, topPairs.length)];
     const a = anchorPair.a;
     const b = anchorPair.b;
 
-    const g2Full = baseGames[1] ? baseGames[1].numeros : [];
-    const g2Seed = [baseGames[1]?.numeros[0], baseGames[1]?.numeros[5]].filter(Boolean);
+    const otherGames = baseGames.filter(g => !(g.numeros.includes(a) && g.numeros.includes(b)));
+    const g2Full = otherGames[0] ? otherGames[0].numeros : [];
+    const g3Full = otherGames[1] ? otherGames[1].numeros : [];
     const g2 = g2Full.filter(n => n !== a && n !== b);
-    const g3 = baseGames[2] ? baseGames[2].numeros.filter(n => n !== a && n !== b) : [];
+    const g3 = g3Full.filter(n => n !== a && n !== b);
 
-    const gameWithA = baseGames.find((g, i) => i > 0 && g.numeros.includes(a));
-    const gameWithB = baseGames.find((g, i) => i > 0 && g.numeros.includes(b));
+    const gameWithA = baseGames.find(g => g.numeros.includes(a) && !g.numeros.includes(b));
+    const gameWithB = baseGames.find(g => g.numeros.includes(b) && !g.numeros.includes(a));
 
     const gA = gameWithA
       ? gameWithA.numeros.filter(n => n !== a && n !== b)
@@ -534,12 +535,12 @@ function generateGames(draws, params = {}) {
 
     for (let k = 0; k < count; k++) {
       let best = null;
-      const topCores = cores5.slice(0, Math.max(15, count));
+      const topCores = cores5.slice(0, Math.max(20, count * 2));
       for (const c of topCores) {
         const penCore =
           (1 + 0.7 * (branchUsage[c.xA] || 0)) *
           (1 + 0.7 * (branchUsage[c.xB] || 0)) *
-          (1 + 0.35 * (branchUsage[c.y1] || 0));
+          (1 + 0.4 * (branchUsage[c.y1] || 0));
 
         for (const z of bridgePool) {
           if (c.core.includes(z)) continue;
@@ -548,8 +549,8 @@ function generateGames(draws, params = {}) {
           const nAcima31 = nums.filter(n => n > 31).length;
           if (nAcima31 < 3) continue;
 
-          const sig = nums.join(',');
-          if (games.some(g => g.numeros.join(',') === sig)) continue;
+          // Evita jogos idênticos ou que compartilhem 5 das 6 dezenas no lote
+          if (games.some(g => g.numeros.filter(n => nums.includes(n)).length >= 5)) continue;
 
           const sum = nums.reduce((p, q) => p + q, 0);
           if (sum < somaMin || sum > somaMax) continue;
@@ -561,10 +562,10 @@ function generateGames(draws, params = {}) {
           ];
           const zMin = Math.min(...zEdges);
           const zGeo = Math.pow(zEdges.reduce((p, q) => p * (q || 0.5), 1), 1 / zEdges.length);
-          const score = (c.minE * 3 + c.geo + zMin * 1.5 + zGeo) / (penCore * (1 + 0.35 * (branchUsage[z] || 0)));
+          const score = (c.minE * 3 + c.geo + zMin * 1.5 + zGeo) / (penCore * (1 + 0.4 * (branchUsage[z] || 0)));
 
           if (!best || score > best.score) {
-            best = { nums, sig, score, used: [c.xA, c.xB, c.y1, z] };
+            best = { nums, score, used: [c.xA, c.xB, c.y1, z] };
           }
         }
       }
