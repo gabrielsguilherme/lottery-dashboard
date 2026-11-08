@@ -212,7 +212,7 @@
           <h2 class="section-title">Gerador de Jogos por Vetor de Conjuntos (P(A ∩ B) + P(B | A))</h2>
           <p class="hint">Selecione abaixo a aba do motor de seleção por vetor e defina a quantidade de jogos que cada modo deve gerar:</p>
 
-          <!-- Abas de escolha entre Modo A, Modo B e Modo C -->
+          <!-- Abas de escolha entre Modo A, Modo B, Modo C e Modo R -->
           <div class="tabs" id="genModeTabs" style="margin-top: 10px; margin-bottom: 16px;">
             <button class="tab active" type="button" data-gen-mode="vetor_paginado">
               Modo A: Vetor Determinístico (Paginado)
@@ -221,8 +221,20 @@
               Modo B: Vetor de Elite (Feixe Top-3)
             </button>
             <button class="tab" type="button" data-gen-mode="vetor_nucleo">
-              Modo C: Fechamento Condensado (Fusão de Pivôs)
+              Modo C: Fechamento Condensado (5 Canais)
             </button>
+            <button class="tab" type="button" data-gen-mode="regressivo_elite">
+              Modo R: Seletor Regressivo (Melhores A+B+C ≥3)
+            </button>
+          </div>
+
+          <!-- Painel de Filtro Regressivo Walk-Forward -->
+          <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; color: #166534; margin: 0;">
+              <input type="checkbox" id="regressiveFilterCheck" checked style="width: 18px; height: 18px; margin: 0;" />
+              <span>Filtro Regressivo Walk-Forward Ativo (Descartar slots de 1 e 2 acertos nos últimos 10 sorteios e avançar para o próximo ≥ 3 acertos no gerador)</span>
+            </label>
+            <div id="regressiveSummaryBanner" style="margin-top: 6px; font-size: 0.82rem; color: #14532d;"></div>
           </div>
 
           <!-- Painel de Configuração do Modo A -->
@@ -275,11 +287,11 @@
           <!-- Painel de Configuração do Modo C -->
           <div id="gen-mode-panel-vetor_nucleo" class="gen-mode-box" style="display: none; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
-              <strong style="color: var(--primary);">Modo C — Fechamento Condensado (Fusão de Pontes do Pivô)</strong>
+              <strong style="color: var(--primary);">Modo C — Fechamento Condensado (5 Canais de Fusão Estrutural de Pontes)</strong>
               <span class="tag hot">Foco em Quina / Sena na Mesma Linha</span>
             </div>
             <p class="hint" style="margin-bottom: 12px;">
-              Em vez de separar as dezenas fortes em jogos disjuntos, fixa a <strong>Dupla Pivô Campeã</strong> (ex: <code>05 ∩ 27</code>) e funde na <strong>mesma linha</strong> as dezenas pontes dos outros jogos que têm maior elo mínimo (<em>MinEdge</em>) e média geométrica entre si.
+              Funde em 5 canais estruturais a <strong>Espinha G3\G1 + Pass2 + GB</strong>, a <strong>Fusão Disjunta GB + G2 + GA</strong>, a <strong>Ponte Transversal G3+G2+GB</strong>, o <strong>Pivô 05∩27</strong> e a <strong>2ª Camada G5+G4</strong>.
             </p>
             <div class="form-grid" style="margin: 0;">
               <div>
@@ -290,11 +302,32 @@
                 </small>
               </div>
               <div>
-                <label>Dupla Pivô Âncora (0 = Top 1)</label>
-                <input type="number" id="pageOffsetModoC" value="0" min="0" max="4" />
+                <label>Página dos Canais (0 = Top 1)</label>
+                <input type="number" id="pageOffsetModoC" value="0" min="0" max="10" />
                 <small style="color: var(--muted); font-size: 0.78rem; display: block; margin-top: 4px;">
-                  0 = 1ª dupla campeã (05∩27), 1 = 2ª dupla campeã, etc.
+                  0 = 1ª leva dos 5 canais (Top 1–10), 1 = 2ª leva (Top 11–20), etc.
                 </small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Painel de Configuração do Modo R (Seletor Regressivo Elite A+B+C) -->
+          <div id="gen-mode-panel-regressivo_elite" class="gen-mode-box" style="display: none; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+              <strong style="color: var(--primary);">Modo R — Seletor Regressivo Walk-Forward (Melhores Candidatos de A + B + C)</strong>
+              <span class="tag hot">Apenas Candidatos ≥ 3 Acertos</span>
+            </div>
+            <p class="hint" style="margin-bottom: 12px;">
+              Testa regressivamente 160 slots candidatos dos <strong>Modos A, B e C</strong> nos últimos 10 concursos (treinando em <em>t−1</em> para prever <em>t</em>), descarta todos os slots que só fizeram 1 ou 2 acertos (e os que exauriram ciclo no último sorteio) e reúne apenas a elite aprovada com <strong>≥ 3 acertos (Terno, Quadra, Quina e Sena)</strong>.
+            </p>
+            <div class="form-grid" style="margin: 0;">
+              <div>
+                <label>Quantidade de Jogos (Modo R)</label>
+                <input type="number" id="countGamesModoR" value="10" min="1" max="30" />
+              </div>
+              <div>
+                <label>Página do Ranking Regressivo (0 = Top 1)</label>
+                <input type="number" id="pageOffsetModoR" value="0" min="0" max="10" />
               </div>
             </div>
           </div>

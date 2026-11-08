@@ -26,31 +26,32 @@ function setTabs() {
       const panelA = document.getElementById('gen-mode-panel-vetor_paginado');
       const panelB = document.getElementById('gen-mode-panel-vetor_feixe');
       const panelC = document.getElementById('gen-mode-panel-vetor_nucleo');
+      const panelR = document.getElementById('gen-mode-panel-regressivo_elite');
       const nextBtn = document.getElementById('nextPageBtnModoA');
       const resetBtn = document.getElementById('resetPageBtnModoA');
       const genBtn = document.getElementById('generateBtn');
 
+      if (panelA) panelA.style.display = state.genMode === 'vetor_paginado' ? 'block' : 'none';
+      if (panelB) panelB.style.display = state.genMode === 'vetor_feixe' ? 'block' : 'none';
+      if (panelC) panelC.style.display = state.genMode === 'vetor_nucleo' ? 'block' : 'none';
+      if (panelR) panelR.style.display = state.genMode === 'regressivo_elite' ? 'block' : 'none';
+
       if (state.genMode === 'vetor_paginado') {
-        panelA.style.display = 'block';
-        panelB.style.display = 'none';
-        panelC.style.display = 'none';
         nextBtn.style.display = 'inline-block';
         resetBtn.style.display = 'inline-block';
         genBtn.textContent = 'Gerar jogos agora (Modo A)';
       } else if (state.genMode === 'vetor_feixe') {
-        panelA.style.display = 'none';
-        panelB.style.display = 'block';
-        panelC.style.display = 'none';
         nextBtn.style.display = 'none';
         resetBtn.style.display = 'none';
         genBtn.textContent = 'Gerar lote de elite agora (Modo B)';
-      } else {
-        panelA.style.display = 'none';
-        panelB.style.display = 'none';
-        panelC.style.display = 'block';
+      } else if (state.genMode === 'vetor_nucleo') {
         nextBtn.style.display = 'none';
         resetBtn.style.display = 'none';
         genBtn.textContent = 'Gerar fechamento condensado (Modo C)';
+      } else {
+        nextBtn.style.display = 'none';
+        resetBtn.style.display = 'none';
+        genBtn.textContent = 'Gerar Top Candidatos Regressivos (A + B + C)';
       }
       generateGames();
     });
@@ -219,18 +220,43 @@ function updateModoABadge() {
   }
 }
 
+async function loadRegressionSummary() {
+  const banner = document.getElementById('regressiveSummaryBanner');
+  if (!banner) return;
+  try {
+    const reg = await api('/api/regression');
+    const sA = reg.summary.vetor_paginado;
+    const sB = reg.summary.vetor_feixe;
+    const sC = reg.summary.vetor_nucleo;
+    banner.innerHTML =
+      `Janela Walk-Forward (<strong>#${reg.fromConcurso} a #${reg.toConcurso}</strong>): ` +
+      `<strong>Modo A</strong>: ${sA.approvedWFCount}/${sA.totalEvaluated} aprovados (≥3) e ${sA.discardedLowHitsCount} descartados (1-2 acertos) | ` +
+      `<strong>Modo B</strong>: ${sB.approvedWFCount}/${sB.totalEvaluated} aprovados (≥3) e ${sB.discardedLowHitsCount} descartados | ` +
+      `<strong>Modo C</strong>: ${sC.approvedWFCount}/${sC.totalEvaluated} aprovados (≥3, incl. Quinas e Senas) e ${sC.discardedLowHitsCount} descartados.`;
+  } catch (e) {
+    banner.textContent = '';
+  }
+}
+
 async function generateGames() {
   const mode = state.genMode || 'vetor_paginado';
   const count = mode === 'vetor_paginado'
     ? Number(document.getElementById('countGamesModoA').value)
     : mode === 'vetor_feixe'
       ? Number(document.getElementById('countGamesModoB').value)
-      : Number(document.getElementById('countGamesModoC').value);
+      : mode === 'vetor_nucleo'
+        ? Number(document.getElementById('countGamesModoC').value)
+        : Number(document.getElementById('countGamesModoR')?.value || 10);
   const pageOffset = mode === 'vetor_paginado'
     ? Number(document.getElementById('pageOffsetModoA').value)
     : mode === 'vetor_nucleo'
       ? Number(document.getElementById('pageOffsetModoC').value)
-      : 0;
+      : mode === 'regressivo_elite'
+        ? Number(document.getElementById('pageOffsetModoR')?.value || 0)
+        : 0;
+  const regressiveFilter = document.getElementById('regressiveFilterCheck')
+    ? document.getElementById('regressiveFilterCheck').checked
+    : true;
 
   updateModoABadge();
 
@@ -240,6 +266,7 @@ async function generateGames() {
     count,
     mode,
     pageOffset,
+    regressiveFilter,
   };
 
   try {
@@ -293,9 +320,12 @@ async function loadAll() {
   state.stats = stats; state.draws = draws.draws; state.frequency = frequency; state.sets = sets;
   renderStats(stats); renderDraws(draws.draws); renderFrequency(frequency); renderStatsCharts(stats); renderSetTheory(sets);
   await generateGames();
+  loadRegressionSummary();
 }
 
 document.getElementById('generateBtn').addEventListener('click', generateGames);
+const regCheck = document.getElementById('regressiveFilterCheck');
+if (regCheck) regCheck.addEventListener('change', generateGames);
 
 document.getElementById('nextPageBtnModoA').addEventListener('click', () => {
   const pageInput = document.getElementById('pageOffsetModoA');
