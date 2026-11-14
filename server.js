@@ -122,6 +122,7 @@ async function parseCaixaRawXlsx(filePath) {
 
 async function loadDraws() {
   const candidates = [
+    path.join(__dirname, 'data', 'Mega-Sena (3).xlsx'),
     path.join(__dirname, 'data', 'Mega-Sena (1).xlsx'),
     path.join(__dirname, 'data', 'Mega-Sena.xlsx'),
     path.join(__dirname, 'data', 'MegaSena_Dashboard.xlsx'),
