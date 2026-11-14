@@ -83,8 +83,44 @@
         </div>
       </div>
       <div class="actions" id="headerActions">
+        <button class="btn-secondary" id="toggleZeroTokenBtn" type="button">⚡ Cadastrar Sorteio / Importar .xlsx</button>
         <button class="btn-secondary" id="reloadBtn">Recarregar planilha</button>
       </div>
+    </div>
+
+    <!-- Central Zero-Token: Cadastrar Novo Sorteio ou Enviar Planilha .xlsx -->
+    <div class="card" id="zeroTokenPanel" style="display: none; margin-bottom: 20px; border: 2px solid var(--primary); background: #f0fdf4;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+        <h2 class="section-title" style="margin: 0; color: #166534;">⚡ Autoatendimento Zero-Token: Atualizar Resultados sem gastar IA</h2>
+        <span class="tag hot">Atualiza Planilha + Cache Automaticamente</span>
+      </div>
+      <div class="grid-2" style="grid-template-columns: 1.3fr 0.7fr; gap: 16px;">
+        <div style="background: #ffffff; padding: 14px; border-radius: 8px; border: 1px solid #bbf7d0;">
+          <strong style="display: block; margin-bottom: 8px; color: #166534;">➕ Opção 1: Digitar Novo Concurso Sorteado</strong>
+          <div class="form-grid" style="grid-template-columns: 110px 130px 1fr; margin-bottom: 10px;">
+            <div>
+              <label>Concurso</label>
+              <input type="number" id="quickConcursoInput" placeholder="Ex: 3086" />
+            </div>
+            <div>
+              <label>Data</label>
+              <input type="text" id="quickDataInput" placeholder="dd/mm/aaaa" />
+            </div>
+            <div>
+              <label>6 Dezenas Sorteadas (separadas por espaço ou traço)</label>
+              <input type="text" id="quickBolasInput" placeholder="Ex: 05 12 24 37 44 58" />
+            </div>
+          </div>
+          <button class="btn-primary" id="quickAddDrawBtn" type="button">Salvar Concurso & Recalcular</button>
+        </div>
+        <div style="background: #ffffff; padding: 14px; border-radius: 8px; border: 1px solid #bbf7d0;">
+          <strong style="display: block; margin-bottom: 8px; color: var(--accent);">📤 Opção 2: Enviar Planilha Oficial (.xlsx) Baixada da Caixa</strong>
+          <p class="hint" style="margin-bottom: 10px; font-size: 0.84rem;">Selecione o arquivo <code>Mega-Sena.xlsx</code> da sua pasta Downloads para atualizar toda a base em 1 clique:</p>
+          <input type="file" id="uploadXlsxInput" accept=".xlsx" style="margin-bottom: 10px; padding: 8px;" />
+          <button class="btn-secondary" id="uploadXlsxBtn" type="button" style="width: 100%;">Importar Planilha .xlsx</button>
+        </div>
+      </div>
+      <div id="zeroTokenStatus" style="margin-top: 10px; font-weight: 700; font-size: 0.9rem; color: #166534;"></div>
     </div>
 
     <!-- Área da Aplicação Principal -->
@@ -228,13 +264,38 @@
             </button>
           </div>
 
-          <!-- Painel de Filtro Regressivo Walk-Forward -->
-          <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
-            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; color: #166534; margin: 0;">
-              <input type="checkbox" id="regressiveFilterCheck" checked style="width: 18px; height: 18px; margin: 0;" />
-              <span>Filtro Regressivo Walk-Forward Ativo (Descartar slots de 1 e 2 acertos nos últimos 10 sorteios e avançar para o próximo ≥ 3 acertos no gerador)</span>
-            </label>
-            <div id="regressiveSummaryBanner" style="margin-top: 6px; font-size: 0.82rem; color: #14532d;"></div>
+          <!-- Painel de Simulação Walk-Forward Agnóstico e Ponderação de Apostas -->
+          <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 14px; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+              <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; color: #166534; margin: 0;">
+                <input type="checkbox" id="regressiveFilterCheck" checked style="width: 18px; height: 18px; margin: 0;" />
+                <span>Motor Walk-Forward Agnóstico & Ponderação de Apostas Ativo (Descarta ≤ 2 acertos e pondera o peso de cada jogo)</span>
+              </label>
+              <span class="tag hot" id="wfValidationBadge">Validação Estrita (Zero Vazamento)</span>
+            </div>
+            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 10px;">
+              <div>
+                <label style="color: #166534;">Concurso Alvo a Simular (<code>targetConcurso</code>)</label>
+                <input type="number" id="wfTargetConcurso" placeholder="Ex: 3086 (ou 3082 p/ auditar)" />
+                <small style="color: #15803d; font-size: 0.76rem; display: block; margin-top: 3px;">
+                  Concurso futuro (ex: próximo) ou passado (audita acertos reais).
+                </small>
+              </div>
+              <div>
+                <label style="color: #166534;">Concursos para Trás (<code>lookbackCount</code>)</label>
+                <input type="number" id="wfLookbackCount" value="10" min="1" max="50" />
+                <small style="color: #15803d; font-size: 0.76rem; display: block; margin-top: 3px;">
+                  Tamanho da coleção <code>windowDraws</code> validada no Walk-Forward.
+                </small>
+              </div>
+              <div style="display: flex; align-items: flex-end; gap: 8px;">
+                <button class="btn-primary" id="runWfAuditBtn" type="button" style="width: 100%; padding: 12px;">
+                  🔬 Simular Walk-Forward & Ponderar
+                </button>
+              </div>
+            </div>
+            <div id="regressiveSummaryBanner" style="margin-top: 6px; font-size: 0.84rem; color: #14532d;"></div>
+            <div id="wfAuditResultBox" style="margin-top: 10px; display: none; background: #ffffff; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px;"></div>
           </div>
 
           <!-- Painel de Configuração do Modo A -->
@@ -361,7 +422,7 @@
             <h2 class="section-title" style="margin: 0;">Jogos sugeridos</h2>
             <div id="batchSetSummary" style="font-size: 0.85rem; color: var(--accent); font-weight: 700;"></div>
           </div>
-          <div class="table-wrap"><table><thead><tr><th>Jogo</th><th>Números</th><th>Soma</th><th>Pares</th><th>Sinergia (A∩B)</th><th>Par Mais Forte</th><th>Pares Inéditos</th><th>Modo / Estratégia</th><th>Custo</th><th>Rateio</th><th>Histórico</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Jogo</th><th>Números</th><th>Peso Walk-Forward</th><th>Soma</th><th>Pares</th><th>Sinergia (A∩B)</th><th>Par Mais Forte</th><th>Validação WF / Inéditos</th><th>Modo / Estratégia</th><th>Custo</th><th>Rateio</th><th>Histórico</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
         </div>
       </section>
     </div>

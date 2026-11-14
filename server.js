@@ -26,9 +26,72 @@ const JSZip = require('jszip');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const {
+  VALID_MODELS,
+  MODEL_LABELS,
+  runWalkForwardSimulation,
+  clearWalkForwardCache,
+} = require('./walkForwardEngine');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey_megasena_dashboard';
 const USERS_PATH = path.join(__dirname, 'data', 'users.json');
+const CUSTOM_DRAWS_PATH = path.join(__dirname, 'data', 'custom_draws.json');
+
+function loadCustomDraws() {
+  if (!fs.existsSync(CUSTOM_DRAWS_PATH)) return [];
+  try {
+    return JSON.parse(fs.readFileSync(CUSTOM_DRAWS_PATH, 'utf8') || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveCustomDraws(customDraws) {
+  fs.writeFileSync(CUSTOM_DRAWS_PATH, JSON.stringify(customDraws, null, 2));
+}
+
+function mergeWithCustomDraws(baseDraws) {
+  const custom = loadCustomDraws();
+  if (!custom.length) return baseDraws;
+  const map = new Map();
+  for (const d of baseDraws) map.set(d.concurso, d);
+  for (const d of custom) map.set(d.concurso, d);
+  return Array.from(map.values()).sort((a, b) => a.concurso - b.concurso);
+}
+
+async function appendRowToCaixaXlsx(filePath, drawObj) {
+  if (!fs.existsSync(filePath)) return;
+  try {
+    const buf = fs.readFileSync(filePath);
+    const zip = await JSZip.loadAsync(buf);
+    const sheetFile = zip.file('xl/worksheets/sheet1.xml');
+    if (!sheetFile) return;
+    let xml = await sheetFile.async('string');
+    if (xml.includes(`<v>${drawObj.concurso}</v>`)) return;
+    const rowMatch = [...xml.matchAll(/<row r="(\d+)"/g)];
+    const nextRowNum = rowMatch.length > 0 ? Number(rowMatch[rowMatch.length - 1][1]) + 1 : 3090;
+    const [b1, b2, b3, b4, b5, b6] = drawObj.bolas;
+    const newRowXml =
+      `<row r="${nextRowNum}">` +
+      `<c r="A${nextRowNum}" t="n"><v>${drawObj.concurso}</v></c>` +
+      `<c r="B${nextRowNum}" t="str"><v>${drawObj.data}</v></c>` +
+      `<c r="C${nextRowNum}" t="n"><v>${b1}</v></c>` +
+      `<c r="D${nextRowNum}" t="n"><v>${b2}</v></c>` +
+      `<c r="E${nextRowNum}" t="n"><v>${b3}</v></c>` +
+      `<c r="F${nextRowNum}" t="n"><v>${b4}</v></c>` +
+      `<c r="G${nextRowNum}" t="n"><v>${b5}</v></c>` +
+      `<c r="H${nextRowNum}" t="n"><v>${b6}</v></c>` +
+      `</row>`;
+    if (xml.includes('</sheetData>')) {
+      xml = xml.replace('</sheetData>', `${newRowXml}</sheetData>`);
+      zip.file('xl/worksheets/sheet1.xml', xml);
+      const outBuf = await zip.generateAsync({ type: 'nodebuffer' });
+      fs.writeFileSync(filePath, outBuf);
+    }
+  } catch (err) {
+    console.warn('Aviso ao anexar linha na planilha:', err.message);
+  }
+}
 
 function loadUsers() {
   if (!fs.existsSync(USERS_PATH)) {
@@ -70,7 +133,7 @@ const PORT = process.env.PORT || 3000;
 const XLSX_PATH = path.join(__dirname, 'data', 'MegaSena_Dashboard.xlsx');
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── Load and parse xlsx ─────────────────────────────────────────────────────
@@ -137,8 +200,9 @@ async function loadDraws() {
   try {
     const draws = await parseCaixaRawXlsx(foundPath);
     if (draws.length > 0) {
-      console.log(`Carregados ${draws.length} concursos via parser Caixa de: ${path.basename(foundPath)}`);
-      return draws;
+      const merged = mergeWithCustomDraws(draws);
+      console.log(`Carregados ${merged.length} concursos via parser Caixa de: ${path.basename(foundPath)}`);
+      return merged;
     }
   } catch (err) {
     // Se não for formato Caixa raw, cai no ExcelJS abaixo
@@ -183,8 +247,9 @@ async function loadDraws() {
   });
 
   draws.sort((a, b) => a.concurso - b.concurso);
-  console.log(`Carregados ${draws.length} concursos via ExcelJS de: ${path.basename(foundPath)}`);
-  return draws;
+  const merged = mergeWithCustomDraws(draws);
+  console.log(`Carregados ${merged.length} concursos via ExcelJS de: ${path.basename(foundPath)}`);
+  return merged;
 }
 
 // ─── Frequency analysis ───────────────────────────────────────────────────────
@@ -1346,67 +1411,31 @@ function selectRegressiveGames(draws, params = {}) {
   const somaMax = Number(params.somaMax) || 230;
   const count = Math.min(Math.max(Number(params.count) || 10, 1), 30);
   const pageOffset = Math.max(Number(params.pageOffset) || 0, 0);
-  const mode = params.mode || 'vetor_paginado';
+  const mode = VALID_MODELS.includes(params.mode) ? params.mode : 'vetor_paginado';
 
-  const profile = getRegressiveProfile(draws, { somaMin, somaMax, windowSize: 10 });
+  const latestConcurso = draws[draws.length - 1]?.concurso || 3085;
+  const targetConcurso = Number(params.targetConcurso) || (latestConcurso + 1);
+  const lookbackCount = Math.min(Math.max(Number(params.lookbackCount) || 10, 1), 100);
+  const historyBeforeTarget = draws.filter(d => d.concurso < targetConcurso);
+  const windowDraws = Array.isArray(params.windowDraws)
+    ? params.windowDraws
+    : historyBeforeTarget.slice(-lookbackCount);
 
-  let pool = [];
-  if (mode === 'regressivo_elite') {
-    // Combina os melhores candidatos aprovados dos Modos C, A e B ordenados por performance regressiva
-    const allApproved = [
-      ...profile.modes.vetor_nucleo.candidates.filter(c => c.wfApproved),
-      ...profile.modes.vetor_paginado.candidates.filter(c => c.wfApproved),
-      ...profile.modes.vetor_feixe.candidates.filter(c => c.wfApproved),
-    ];
-    allApproved.sort((a, b) => b.regressiveScore - a.regressiveScore);
-    const fallbackRes = [
-      ...profile.modes.vetor_nucleo.candidates.filter(c => !c.wfApproved && c.resonanceApproved),
-      ...profile.modes.vetor_paginado.candidates.filter(c => !c.wfApproved && c.resonanceApproved),
-      ...profile.modes.vetor_feixe.candidates.filter(c => !c.wfApproved && c.resonanceApproved),
-    ].sort((a, b) => b.regressiveScore - a.regressiveScore);
-    pool = [...allApproved, ...fallbackRes];
-  } else {
-    const mProf = profile.modes[mode] || profile.modes.vetor_paginado;
-    // Mantém a ordem natural dos slots que atingiram >= 3 acertos no Walk-Forward,
-    // descartando os slots de 1 e 2 acertos e buscando o próximo no gerador!
-    const wfPass = mProf.candidates.filter(c => c.wfApproved);
-    const resPass = mProf.candidates.filter(c => !c.wfApproved && c.resonanceApproved);
-    const rest = mProf.candidates.filter(c => !c.wfApproved && !c.resonanceApproved);
-    pool = [...wfPass, ...resPass, ...rest];
-  }
-
-  const selected = [];
-  const seenSigs = new Set();
-  const targetTotal = (pageOffset + 1) * count;
-
-  for (const cand of pool) {
-    const sig = cand.numeros.join('-');
-    if (seenSigs.has(sig)) continue;
-    // Evita clones com 5 dezenas idênticas quando puxa de páginas seguintes
-    if (selected.some(s => s.numeros.filter(n => cand.numeros.includes(n)).length >= 5)) continue;
-    seenSigs.add(sig);
-    selected.push(cand);
-    if (selected.length >= targetTotal) break;
-  }
-
-  const totalDiscarded = mode === 'regressivo_elite'
-    ? (profile.modes.vetor_paginado.discardedLowHitsCount +
-       profile.modes.vetor_feixe.discardedLowHitsCount +
-       profile.modes.vetor_nucleo.discardedLowHitsCount)
-    : (profile.modes[mode]?.discardedLowHitsCount || 0);
-
-  const slice = selected.slice(pageOffset * count, (pageOffset + 1) * count);
-  return slice.map((c) => {
-    const badge = c.wfApproved
-      ? `WF ≥3: ${c.wfBestDraw}`
-      : `Ressonância ≥3: ${c.bestResDraw}`;
-    return {
-      ...c,
-      descartados1ou2: totalDiscarded,
-      paresIneditos: `${badge} | Slot #${c.slotOriginal}`,
-      estrategia: `${c.estrategia} • [Aprovado ≥3: ${c.wfApproved ? c.wfBestDraw : c.bestResDraw}]`,
-    };
+  const sim = runWalkForwardSimulation({
+    targetConcurso,
+    lookbackCount,
+    windowDraws,
+    allDraws: draws,
+    model: mode,
+    generateGamesFn: (trainDraws, opts) => generateGames(trainDraws, { ...opts, _raw: true }),
+    count,
+    pageOffset,
+    somaMin,
+    somaMax,
+    hasTrevos: false,
   });
+
+  return sim.recommendedGames;
 }
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
@@ -1744,13 +1773,136 @@ app.get('/api/regression', async (req, res) => {
 });
 
 app.get('/api/reload', async (req, res) => {
-  cachedDraws = null;
+  loadingPromise = null;
+  lastLoaded = 0;
   regressiveCache.clear();
+  clearWalkForwardCache();
   try {
     const draws = await getDraws();
-    res.json({ ok: true, total: draws.length });
+    res.json({ ok: true, total: draws.length, latest: draws[draws.length - 1] });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Endpoint Genérico / Agnóstico de Simulação Walk-Forward ──────────────────
+app.post('/api/walk-forward', async (req, res) => {
+  try {
+    const draws = await getDraws();
+    const latestConcurso = draws[draws.length - 1]?.concurso || 3085;
+    const targetConcurso = Number(req.body.targetConcurso) || (latestConcurso + 1);
+    const lookbackCount = Number(req.body.lookbackCount) || 10;
+    const model = req.body.model || req.body.mode || 'vetor_nucleo';
+    const somaMin = Number(req.body.somaMin) || 130;
+    const somaMax = Number(req.body.somaMax) || 230;
+    const count = Math.min(Math.max(Number(req.body.count) || 10, 1), 30);
+    const pageOffset = Math.max(Number(req.body.pageOffset) || 0, 0);
+
+    // Se windowDraws for enviado explicitamente no payload, usa-o para validar o tamanho;
+    // caso contrário, coleta os `lookbackCount` concursos imediatamente anteriores ao targetConcurso.
+    const historyBeforeTarget = draws.filter(d => d.concurso < targetConcurso);
+    const windowDraws = Array.isArray(req.body.windowDraws)
+      ? req.body.windowDraws
+      : historyBeforeTarget.slice(-lookbackCount);
+
+    const simulation = runWalkForwardSimulation({
+      targetConcurso,
+      lookbackCount,
+      windowDraws,
+      allDraws: draws,
+      model,
+      generateGamesFn: (trainDraws, opts) => generateGames(trainDraws, { ...opts, _raw: true }),
+      count,
+      pageOffset,
+      somaMin,
+      somaMax,
+      hasTrevos: false,
+    });
+
+    res.json(simulation);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ─── Autoatendimento (Zero-Token): Cadastrar Novo Sorteio Manualmente ─────────
+app.post('/api/draws/add', async (req, res) => {
+  try {
+    const concurso = parseInt(req.body.concurso, 10);
+    const data = String(req.body.data || new Date().toLocaleDateString('pt-BR')).trim();
+    const rawBolas = Array.isArray(req.body.bolas)
+      ? req.body.bolas
+      : String(req.body.bolas || '')
+          .split(/[\s,;-]+/)
+          .filter(Boolean);
+    const bolas = rawBolas.map(n => parseInt(n, 10)).filter(n => !isNaN(n) && n >= 1 && n <= 60);
+
+    if (!concurso || concurso < 1) {
+      return res.status(400).json({ error: 'Número do concurso inválido.' });
+    }
+    if (new Set(bolas).size !== 6) {
+      return res.status(400).json({ error: 'Informe exatamente 6 dezenas distintas entre 01 e 60.' });
+    }
+
+    const sortedBolas = [...bolas].sort((a, b) => a - b);
+    const drawObj = { concurso, data, bolas: sortedBolas };
+
+    const custom = loadCustomDraws().filter(d => d.concurso !== concurso);
+    custom.push(drawObj);
+    custom.sort((a, b) => a.concurso - b.concurso);
+    saveCustomDraws(custom);
+
+    await appendRowToCaixaXlsx(path.join(__dirname, 'data', 'Mega-Sena (3).xlsx'), drawObj);
+    await appendRowToCaixaXlsx(path.join(__dirname, 'data', 'Mega-Sena.xlsx'), drawObj);
+
+    loadingPromise = null;
+    lastLoaded = 0;
+    regressiveCache.clear();
+    clearWalkForwardCache();
+
+    const updatedDraws = await getDraws();
+    res.json({
+      ok: true,
+      message: `Concurso #${concurso} (${sortedBolas.map(b => String(b).padStart(2, '0')).join('-')}) salvo com sucesso!`,
+      total: updatedDraws.length,
+      latest: updatedDraws[updatedDraws.length - 1],
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Autoatendimento (Zero-Token): Upload de Planilha Oficial (.xlsx) ─────────
+app.post('/api/upload-xlsx', async (req, res) => {
+  try {
+    const { base64Data, filename } = req.body;
+    if (!base64Data) {
+      return res.status(400).json({ error: 'Arquivo .xlsx ausente no envio.' });
+    }
+    const cleanBase64 = base64Data.replace(/^data:.*?;base64,/, '');
+    const buf = Buffer.from(cleanBase64, 'base64');
+
+    const target1 = path.join(__dirname, 'data', 'Mega-Sena (3).xlsx');
+    const target2 = path.join(__dirname, 'data', 'Mega-Sena.xlsx');
+    fs.writeFileSync(target1, buf);
+    fs.writeFileSync(target2, buf);
+
+    loadingPromise = null;
+    lastLoaded = 0;
+    regressiveCache.clear();
+    clearWalkForwardCache();
+
+    const updatedDraws = await getDraws();
+    const latest = updatedDraws[updatedDraws.length - 1];
+    res.json({
+      ok: true,
+      filename: filename || 'Mega-Sena (3).xlsx',
+      total: updatedDraws.length,
+      latest,
+      message: `Planilha atualizada! ${updatedDraws.length} concursos carregados (último: #${latest?.concurso}).`,
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Falha ao processar planilha .xlsx: ' + e.message });
   }
 });
 
@@ -1771,4 +1923,7 @@ module.exports = {
   generateGames,
   getRegressiveProfile,
   selectRegressiveGames,
+  runWalkForwardSimulation,
+  VALID_MODELS,
+  MODEL_LABELS,
 };
