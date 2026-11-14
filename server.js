@@ -899,11 +899,15 @@ function generateGames(draws, params = {}) {
     const selected = [];
     const seenFinal = new Set();
     const targetTotal = (pageOffset + 1) * count;
+    const recent15Draws = draws.slice(-15);
 
     const pickFromList = (list) => {
       for (const item of list) {
         const key = item.numeros.join('-');
         if (seenFinal.has(key)) continue;
+        // Bloqueia combinações que já descarregaram 4+ dezenas nos últimos 15 concursos
+        if (recent15Draws.some(d => item.numeros.filter(n => d.bolas.includes(n)).length >= 4)) continue;
+        if (selected.some(s => s.numeros.filter(n => item.numeros.includes(n)).length >= 5)) continue;
         seenFinal.add(key);
         selected.push(item);
         return true;
@@ -1265,12 +1269,12 @@ function getRegressiveProfile(draws, { somaMin = 130, somaMax = 230, windowSize 
       currentCands.push(...pageGames);
     }
 
-    const lastDrawBalls = draws[draws.length - 1]?.bolas || [];
-    const recentResonanceDraws = draws.slice(-180, -1); // Exclui o último sorteio para evitar exaustão imediata
+    const recent15Draws = draws.slice(-15);
+    const recentResonanceDraws = draws.slice(-180, -15); // Exclui os últimos 15 sorteios para evitar exaustão de ciclo
 
     const enrichedCandidates = currentCands.map((g, sIdx) => {
       const st = slotStats[sIdx];
-      const hitsInLastDraw = g.numeros.filter(n => lastDrawBalls.includes(n)).length;
+      const exhaustedInLast15 = recent15Draws.some(d => g.numeros.filter(n => d.bolas.includes(n)).length >= 4);
       let maxResonance = 0;
       let bestResDraw = '-';
       for (const d of recentResonanceDraws) {
@@ -1283,8 +1287,8 @@ function getRegressiveProfile(draws, { somaMin = 130, somaMax = 230, windowSize 
 
       // Critério Regressivo:
       // 1) O slot no Walk-Forward de 10 sorteios atingiu >= 3 acertos (Terno/Quadra/Quina/Sena)
-      // 2) E o jogo atual não exauriu 4+ dezenas no último sorteio imediato (d=0)
-      const cycleExhausted = hitsInLastDraw >= 4;
+      // 2) E o jogo atual não exauriu 4+ dezenas em nenhum dos últimos 15 concursos
+      const cycleExhausted = exhaustedInLast15;
       const wfApproved = st.maxHits >= 3 && !cycleExhausted;
       const resonanceApproved = maxResonance >= 3 && !cycleExhausted;
 
