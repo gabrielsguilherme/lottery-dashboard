@@ -128,7 +128,7 @@ function runWalkForwardSimulation(params = {}) {
       ]
     : [
         {
-          mode,
+          mode: model,
           label: MODEL_LABELS[model] || model,
           pagesToScan: model === 'vetor_nucleo' ? 4 : 6,
           beamSeedBase: model === 'vetor_feixe' ? 2000 : 1000,
